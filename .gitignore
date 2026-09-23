@@ -1,0 +1,16 @@
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Secrets — safety net, matches at any depth
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Solana wallet keypairs
+id.json
