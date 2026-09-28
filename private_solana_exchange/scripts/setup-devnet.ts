@@ -2,8 +2,9 @@
  * One-time devnet setup, safe to re-run (skips finished steps):
  *   1. pin fake-USDC image + metadata to IPFS
  *   2. init_config (config + USDC mint)
- *   3. pin the credit_balance circuit to IPFS and register it with Arcium
+ *   3. pin each MPC circuit to IPFS and register it with Arcium
  *   4. index USDC in the backend token registry
+ *   5. pin the ZK proving key (zk/build/unshield.zkey) for deployed frontends
  *
  * Run from private_solana_exchange/ (backend must be running for step 4):
  *   ANCHOR_PROVIDER_URL=https://api.devnet.solana.com ANCHOR_WALLET=~/.config/solana/id.json \
@@ -90,29 +91,38 @@ async function main() {
     console.log("config: initialized, USDC mint", usdcMint.toBase58(), sig);
   }
 
-  // 3. MPC circuit, hosted on IPFS.
-  const compDefAccount = getCompDefAccAddress(
-    program.programId,
-    Buffer.from(getCompDefAccOffset("credit_balance")).readUInt32LE(),
-  );
-  if (await provider.connection.getAccountInfo(compDefAccount)) {
-    console.log("credit_balance circuit: already registered");
-  } else {
-    const circuitFile = "build/credit_balance.arcis";
+  // 3. MPC circuits, hosted on IPFS.
+  const circuits = {
+    credit_balance: (url: string) => program.methods.initCreditBalanceCompDef(url),
+    seed_pool: (url: string) => program.methods.initSeedPoolCompDef(url),
+    swap: (url: string) => program.methods.initSwapCompDef(url),
+    commit_balance: (url: string) => program.methods.initCommitBalanceCompDef(url),
+    debit_balance: (url: string) => program.methods.initDebitBalanceCompDef(url),
+  };
+  const mxeAccount = getMXEAccAddress(program.programId);
+  const mxe = await getArciumProgram(provider).account.mxeAccount.fetch(mxeAccount);
+  const hash = (b: Buffer) => createHash("sha256").update(b).digest("hex");
+
+  for (const [name, init] of Object.entries(circuits)) {
+    const compDefAccount = getCompDefAccAddress(
+      program.programId,
+      Buffer.from(getCompDefAccOffset(name)).readUInt32LE(),
+    );
+    if (await provider.connection.getAccountInfo(compDefAccount)) {
+      console.log(`${name} circuit: already registered`);
+      continue;
+    }
+    const circuitFile = `build/${name}.arcis`;
     const url = await pinFile(circuitFile, "application/octet-stream");
-    console.log("circuit pinned:", url);
+    console.log(`${name} circuit pinned:`, url);
 
     // Arcium nodes check the file's SHA-256 against the hash compiled into the program.
     const served = Buffer.from(await (await fetch(url)).arrayBuffer());
     const local = fs.readFileSync(circuitFile);
-    const hash = (b: Buffer) => createHash("sha256").update(b).digest("hex");
-    if (hash(served) !== hash(local)) throw new Error("gateway served a different circuit file");
-    console.log("circuit sha256 verified:", hash(local));
+    if (hash(served) !== hash(local)) throw new Error(`gateway served a different ${name} file`);
+    console.log(`${name} sha256 verified:`, hash(local));
 
-    const mxeAccount = getMXEAccAddress(program.programId);
-    const mxe = await getArciumProgram(provider).account.mxeAccount.fetch(mxeAccount);
-    const sig = await program.methods
-      .initCreditBalanceCompDef(url)
+    const sig = await init(url)
       .accountsPartial({
         payer: admin,
         mxeAccount,
@@ -120,7 +130,7 @@ async function main() {
         addressLookupTable: getLookupTableAddress(program.programId, mxe.lutOffsetSlot),
       })
       .rpc({ commitment: "confirmed" });
-    console.log("credit_balance circuit: registered", sig);
+    console.log(`${name} circuit: registered`, sig);
   }
 
   // 4. Token registry (best effort).
@@ -133,6 +143,22 @@ async function main() {
     console.log("backend registry:", res.status, res.ok ? "USDC indexed" : await res.text());
   } catch {
     console.log("backend registry: skipped (backend not running) — re-run later to index USDC");
+  }
+
+  // 5. ZK proving key. Local dev serves it from frontend/public/zk; a deployed
+  // frontend loads it from IPFS (NEXT_PUBLIC_UNSHIELD_ZKEY_URL).
+  const zkey = "../zk/build/unshield.zkey";
+  const record = "../zk/zkey-ipfs.json";
+  if (fs.existsSync(zkey)) {
+    const sha256 = hash(fs.readFileSync(zkey));
+    const pinned = fs.existsSync(record) ? JSON.parse(fs.readFileSync(record, "utf8")) : null;
+    if (pinned?.sha256 === sha256) {
+      console.log("zkey: already pinned", pinned.url);
+    } else {
+      const url = await pinFile(zkey, "application/octet-stream");
+      fs.writeFileSync(record, JSON.stringify({ url, sha256 }, null, 2) + "\n");
+      console.log("zkey: pinned", url, "→ set NEXT_PUBLIC_UNSHIELD_ZKEY_URL to it for deploys");
+    }
   }
 }
 

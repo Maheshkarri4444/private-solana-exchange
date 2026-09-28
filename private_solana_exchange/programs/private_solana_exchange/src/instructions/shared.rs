@@ -5,6 +5,17 @@ use anchor_spl::token_interface::{
 
 use crate::{constants::*, error::ErrorCode};
 
+/// Reads an SPL mint's supply (bytes 36..44 of the base mint layout) without
+/// deserializing its Token-2022 extensions, which costs a lot of stack.
+pub fn mint_supply(mint: &AccountInfo) -> Result<u64> {
+    let data = mint.try_borrow_data()?;
+    let bytes: [u8; 8] = data
+        .get(36..44)
+        .and_then(|s| s.try_into().ok())
+        .ok_or(ErrorCode::InvalidMint)?;
+    Ok(u64::from_le_bytes(bytes))
+}
+
 pub fn validate_metadata(name: &str, symbol: &str, uri: &str) -> Result<()> {
     require!(
         !name.is_empty()

@@ -37,17 +37,18 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   loading?: boolean;
-  variant?: "primary" | "ghost";
+  variant?: "primary" | "danger" | "ghost";
 }) {
-  const styles =
-    variant === "primary"
-      ? "bg-accent text-white hover:bg-accent-strong disabled:bg-accent/40"
-      : "border border-line text-fg hover:bg-white/5 disabled:opacity-50";
+  const styles = {
+    primary: "bg-accent text-accent-fg hover:bg-accent-strong disabled:bg-accent/30",
+    danger: "bg-danger text-white hover:brightness-110 disabled:bg-danger/30",
+    ghost: "border border-line text-fg hover:bg-white/5 disabled:opacity-50",
+  }[variant];
   return (
     <button
       {...props}
       disabled={props.disabled || loading}
-      className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-medium transition disabled:cursor-not-allowed ${styles} ${className}`}
+      className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition disabled:cursor-not-allowed ${styles} ${className}`}
     >
       {loading && <Spinner />}
       {children}
@@ -64,7 +65,7 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted">
@@ -84,11 +85,24 @@ export function Spinner() {
 
 export function Notice({ tone, children }: { tone: "info" | "success" | "error"; children: ReactNode }) {
   const styles = {
-    info: "border-accent/30 bg-accent/10 text-fg",
-    success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-    error: "border-red-500/30 bg-red-500/10 text-red-300",
+    info: "border-private/30 bg-private/10 text-fg",
+    success: "border-accent/30 bg-accent/10 text-accent",
+    error: "border-danger/30 bg-danger/10 text-danger",
   }[tone];
   return <div className={`rounded-xl border px-4 py-3 text-sm ${styles}`}>{children}</div>;
+}
+
+export function Badge({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+/** Marks something that is encrypted on-chain. */
+export function PrivateBadge({ children = "private" }: { children?: ReactNode }) {
+  return <Badge className="bg-private/15 text-private">🔒 {children}</Badge>;
 }
 
 export function TokenIcon({ image, symbol, size = 36 }: { image?: string | null; symbol?: string; size?: number }) {
@@ -104,7 +118,7 @@ export function TokenIcon({ image, symbol, size = 36 }: { image?: string | null;
     />
   ) : (
     <span
-      className="flex shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-semibold text-accent"
+      className="flex shrink-0 items-center justify-center rounded-full bg-private/20 text-xs font-semibold text-private"
       style={{ width: size, height: size }}
     >
       {(symbol ?? "?").slice(0, 3)}

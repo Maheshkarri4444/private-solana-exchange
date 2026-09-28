@@ -24,4 +24,26 @@ pub enum ErrorCode {
     Overflow,
     #[msg("MPC result is encrypted to the wrong key")]
     EncryptionKeyMismatch,
+    #[msg("Pool fee must be between 0.10% and 10%")]
+    InvalidFee,
+    #[msg("USDC cannot have its own pool")]
+    CannotPoolUsdc,
+    #[msg("Only the token creator can create or seed its pool")]
+    NotPoolCreator,
+    #[msg("This pool already has liquidity")]
+    PoolAlreadySeeded,
+    #[msg("This pool is not open for trading yet")]
+    PoolNotActive,
+    #[msg("You have no balance of this token yet")]
+    NoBalance,
+    #[msg("Not a valid token mint")]
+    InvalidMint,
+    #[msg("Account does not belong to this user or token")]
+    WrongAccount,
+    #[msg("A move to your wallet is in progress on this account; finish or cancel it first")]
+    AccountFrozen,
+    #[msg("This step of the move to your wallet is not available right now")]
+    WrongUnshieldStep,
+    #[msg("The zero-knowledge proof is not valid")]
+    InvalidProof,
 }

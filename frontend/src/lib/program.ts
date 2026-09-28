@@ -23,6 +23,8 @@ export const pdas = {
   tokenInfo: (mint: PublicKey) => pda(Buffer.from("token"), mint.toBuffer()),
   eta: (owner: PublicKey, mint: PublicKey) =>
     pda(Buffer.from("eta"), owner.toBuffer(), mint.toBuffer()),
+  pool: (tokenMint: PublicKey) => pda(Buffer.from("pool"), tokenMint.toBuffer()),
+  lpMint: (pool: PublicKey) => pda(Buffer.from("lp_mint"), pool.toBuffer()),
 };
 
 /** Byte offset of `owner` in EncryptedTokenAccount: discriminator 8 + balance_ct 32 + nonce 16. */

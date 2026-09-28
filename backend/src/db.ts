@@ -1,7 +1,7 @@
 import { Collection, MongoClient } from "mongodb";
 import { config } from "./config.js";
 
-/** A token in the registry. On-chain data is the source of truth; this is a fast index. */
+/** A token: metadata + public supplies. On-chain data is the source of truth; this is a fast index. */
 export interface TokenDoc {
   mint: string;
   creator: string;
@@ -13,19 +13,78 @@ export interface TokenDoc {
   maxSupply: string;
   isUsdc: boolean;
   createdAt: Date;
+  /** Private supply: sum of all encrypted balances (TokenInfo.exchange_supply). */
+  exchangeSupply?: string;
+  /** Real SPL supply: tokens moved out to public wallets. */
+  splSupply?: string;
+  /** Slot the supplies were read at (older snapshots never overwrite newer ones). */
+  supplySlot?: number;
+}
+
+/**
+ * An encrypted token account, exactly as stored on-chain. The balance is a
+ * ciphertext: the backend cannot read it, only the owner's browser can.
+ */
+export interface EtaDoc {
+  address: string;
+  owner: string;
+  mint: string;
+  balanceCt: string; // base64, 32 bytes
+  nonce: string;
+  isInitialized: boolean;
+  pending: boolean;
+  unshieldState: number;
+  unshieldCommitment: string; // hex, 32 bytes
+  unshieldSaltCt: string; // base64, 32 bytes
+  unshieldSaltNonce: string;
+  unshieldAmount: string;
+  slot: number;
+}
+
+export interface PoolDoc {
+  address: string;
+  tokenMint: string;
+  lpMint: string;
+  creator: string;
+  feeBps: number;
+  status: number;
+  price: string; // USDC per token × 1e12
+  health: number;
+  swapCount: number;
+  createdAt: number;
+  lastTradeAt: number;
+  busy: boolean;
+  slot: number;
+}
+
+/** Every public price a pool has had (the on-chain ring buffer keeps only 32). */
+export interface PricePointDoc {
+  pool: string;
+  time: number;
+  price: string;
 }
 
 const client = new MongoClient(config.mongoUri);
-let tokenCollection: Collection<TokenDoc> | undefined;
+let db: ReturnType<MongoClient["db"]> | undefined;
 
 export async function connectDb(): Promise<void> {
   await client.connect();
-  tokenCollection = client.db(config.mongoDb).collection<TokenDoc>("tokens");
-  await tokenCollection.createIndex({ mint: 1 }, { unique: true });
-  await tokenCollection.createIndex({ creator: 1, createdAt: -1 });
+  db = client.db(config.mongoDb);
+  await tokens().createIndex({ mint: 1 }, { unique: true });
+  await tokens().createIndex({ creator: 1, createdAt: -1 });
+  await etas().createIndex({ address: 1 }, { unique: true });
+  await etas().createIndex({ owner: 1 });
+  await pools().createIndex({ address: 1 }, { unique: true });
+  await pools().createIndex({ tokenMint: 1 }, { unique: true });
+  await prices().createIndex({ pool: 1, time: 1, price: 1 }, { unique: true });
 }
 
-export function tokens(): Collection<TokenDoc> {
-  if (!tokenCollection) throw new Error("Database not connected");
-  return tokenCollection;
+function collection<T extends object>(name: string): Collection<T> {
+  if (!db) throw new Error("Database not connected");
+  return db.collection<T>(name);
 }
+
+export const tokens = () => collection<TokenDoc>("tokens");
+export const etas = () => collection<EtaDoc>("etas");
+export const pools = () => collection<PoolDoc>("pools");
+export const prices = () => collection<PricePointDoc>("pool_prices");

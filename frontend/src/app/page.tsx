@@ -1,54 +1,66 @@
+"use client";
+
 import Link from "next/link";
+import { PoolCard } from "@/components/PoolCard";
+import { Portfolio } from "@/components/Portfolio";
+import { Notice, Spinner } from "@/components/ui";
+import { usePools } from "@/hooks/usePools";
 
-const steps = [
-  {
-    title: "Sign once",
-    text: "Your wallet signs a message. Your browser turns it into your private encryption key.",
-  },
-  {
-    title: "Encrypted balances",
-    text: "Every token balance is stored on-chain encrypted. Only you can read yours.",
-  },
-  {
-    title: "Computed by Arcium",
-    text: "Arcium's MPC network updates balances without ever seeing the numbers.",
-  },
-];
-
+/** The user panel: private balances on top, live pools and order books below. */
 export default function Home() {
-  return (
-    <div className="py-12">
-      <p className="mb-4 text-sm font-medium text-accent">Solana devnet · Arcium MPC</p>
-      <h1 className="max-w-2xl text-5xl font-semibold leading-tight tracking-tight">
-        Trade without showing your balance.
-      </h1>
-      <p className="mt-5 max-w-xl text-lg text-muted">
-        A private exchange on Solana. Token supplies are public. What you hold and trade is not.
-      </p>
-      <div className="mt-8 flex gap-3">
-        <Link
-          href="/profile"
-          className="inline-flex h-11 items-center rounded-xl bg-accent px-5 text-sm font-medium text-white hover:bg-accent-strong"
-        >
-          Open your profile
-        </Link>
-        <Link
-          href="/profile/creator"
-          className="inline-flex h-11 items-center rounded-xl border border-line px-5 text-sm font-medium hover:bg-white/5"
-        >
-          Creator page
-        </Link>
-      </div>
+  const { pools, loading, error } = usePools();
+  const live = pools.filter((p) => p.active);
 
-      <div className="mt-16 grid gap-4 md:grid-cols-3">
-        {steps.map((s, i) => (
-          <div key={s.title} className="rounded-2xl border border-line bg-card p-6">
-            <p className="font-mono text-xs text-muted">0{i + 1}</p>
-            <h3 className="mt-2 font-semibold">{s.title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-muted">{s.text}</p>
+  return (
+    <div className="space-y-12">
+      <Portfolio />
+
+      <section>
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-semibold">Live pools</h2>
+            <p className="mt-1 text-sm text-muted">
+              Reserves are private. Arcium publishes only the price and a health score after every trade.
+            </p>
           </div>
-        ))}
-      </div>
+          <Link
+            href="/create/pool"
+            className="rounded-xl border border-line px-4 py-2 text-sm font-medium transition hover:border-accent hover:text-accent"
+          >
+            ＋ Create pool
+          </Link>
+        </div>
+
+        {error && <Notice tone="error">{error}</Notice>}
+        {loading ? (
+          <div className="flex items-center gap-2 text-muted">
+            <Spinner /> Loading pools…
+          </div>
+        ) : live.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-line p-10 text-center text-muted">
+            No pools yet.{" "}
+            <Link href="/create/pool" className="text-accent hover:underline">
+              Launch the first one →
+            </Link>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {live.map((pool) => (
+              <PoolCard key={pool.address} pool={pool} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <h2 className="text-2xl font-semibold">Order books</h2>
+        <p className="mt-1 mb-5 text-sm text-muted">
+          Hidden limit orders — price, size and side stay encrypted until they match.
+        </p>
+        <div className="rounded-2xl border border-dashed border-line p-10 text-center text-muted">
+          Private order books are coming next.
+        </div>
+      </section>
     </div>
   );
 }

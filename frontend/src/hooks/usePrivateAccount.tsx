@@ -1,7 +1,8 @@
 "use client";
 
-import { AnchorProvider } from "@anchor-lang/core";
+import { AnchorProvider, type Wallet } from "@anchor-lang/core";
 import { useAnchorWallet, useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { type Keypair, PublicKey, type Transaction } from "@solana/web3.js";
 import {
   createContext,
   type ReactNode,
@@ -15,9 +16,22 @@ import { fetchMxePublicKey } from "@/lib/arcium";
 import { type PrivateKeys, SIGN_MESSAGE, clearKeys, deriveKeys, loadKeys, saveKeys } from "@/lib/keys";
 import { type ExchangeProgram, getProgram, pdas } from "@/lib/program";
 
+/** For reading public data (pools, supplies) before a wallet connects. */
+const readOnlyWallet = {
+  publicKey: PublicKey.default,
+  signTransaction: () => Promise.reject(new Error("Connect a wallet first")),
+  signAllTransactions: () => Promise.reject(new Error("Connect a wallet first")),
+} as unknown as Wallet;
+
+/** Signs + sends a transaction and waits until it is confirmed. */
+export type Send = (tx: Transaction, signers?: Keypair[]) => Promise<string>;
+
 interface PrivateAccount {
   provider: AnchorProvider | null;
   program: ExchangeProgram | null;
+  /** Always available, for public data. */
+  readProgram: ExchangeProgram;
+  send: Send;
   /** Derived from the wallet signature; null until the user unlocks. */
   keys: PrivateKeys | null;
   /** The Arcium network's public key (needed to decrypt). */
@@ -36,7 +50,29 @@ const Context = createContext<PrivateAccount | null>(null);
 export function PrivateAccountProvider({ children }: { children: ReactNode }) {
   const { connection } = useConnection();
   const anchorWallet = useAnchorWallet();
-  const { publicKey, signMessage } = useWallet();
+  const { publicKey, signMessage, sendTransaction } = useWallet();
+
+  // The wallet signs AND sends (Phantom's signAndSendTransaction) on the chain of
+  // our RPC (devnet), so the wallet simulates it on the right network.
+  const send = useCallback<Send>(
+    async (tx, signers = []) => {
+      if (!publicKey) throw new Error("Connect a wallet first");
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = blockhash;
+      const signature = await sendTransaction(tx, connection, {
+        signers,
+        preflightCommitment: "confirmed",
+      });
+      const { value } = await connection.confirmTransaction(
+        { signature, blockhash, lastValidBlockHeight },
+        "confirmed",
+      );
+      if (value.err) throw new Error(`Transaction failed: ${JSON.stringify(value.err)}`);
+      return signature;
+    },
+    [publicKey, sendTransaction, connection],
+  );
 
   const provider = useMemo(
     () =>
@@ -49,6 +85,11 @@ export function PrivateAccountProvider({ children }: { children: ReactNode }) {
     [connection, anchorWallet],
   );
   const program = useMemo(() => (provider ? getProgram(provider) : null), [provider]);
+  const readProvider = useMemo(
+    () => new AnchorProvider(connection, readOnlyWallet, { commitment: "confirmed" }),
+    [connection],
+  );
+  const readProgram = useMemo(() => getProgram(readProvider), [readProvider]);
 
   const [keys, setKeys] = useState<PrivateKeys | null>(null);
   const [mxePublicKey, setMxePublicKey] = useState<Uint8Array | null>(null);
@@ -76,8 +117,8 @@ export function PrivateAccountProvider({ children }: { children: ReactNode }) {
   }, [refreshRegistration]);
 
   useEffect(() => {
-    if (provider && !mxePublicKey) fetchMxePublicKey(provider).then(setMxePublicKey).catch(console.error);
-  }, [provider, mxePublicKey]);
+    if (!mxePublicKey) fetchMxePublicKey(readProvider).then(setMxePublicKey).catch(console.error);
+  }, [readProvider, mxePublicKey]);
 
   const unlock = useCallback(async () => {
     if (!wallet || !signMessage) throw new Error("This wallet cannot sign messages");
@@ -89,12 +130,13 @@ export function PrivateAccountProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(async () => {
     if (!program || !publicKey || !keys) throw new Error("Unlock first");
-    await program.methods
+    const tx = await program.methods
       .registerUser(Array.from(keys.publicKey))
       .accountsPartial({ owner: publicKey })
-      .rpc({ commitment: "confirmed" });
+      .transaction();
+    await send(tx);
     await refreshRegistration();
-  }, [program, publicKey, keys, refreshRegistration]);
+  }, [program, publicKey, keys, send, refreshRegistration]);
 
   const lock = useCallback(() => {
     if (wallet) clearKeys(wallet);
@@ -109,6 +151,8 @@ export function PrivateAccountProvider({ children }: { children: ReactNode }) {
   const value: PrivateAccount = {
     provider,
     program,
+    readProgram,
+    send,
     keys,
     mxePublicKey,
     registered: registeredKey === undefined ? null : registeredKey !== null,

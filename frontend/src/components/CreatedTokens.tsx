@@ -1,88 +1,73 @@
 "use client";
 
-import { TOKEN_2022_PROGRAM_ID, getMint } from "@solana/spl-token";
-import { PublicKey } from "@solana/web3.js";
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePools } from "@/hooks/usePools";
 import { usePrivateAccount } from "@/hooks/usePrivateAccount";
 import type { TokenMeta } from "@/lib/api";
 import { explorerUrl } from "@/lib/config";
 import { formatAmount, shortAddress } from "@/lib/format";
-import { pdas } from "@/lib/program";
 import { Card, TokenIcon } from "./ui";
 
-interface Row {
-  token: TokenMeta;
-  exchangeSupply: bigint;
-  splSupply: bigint;
-}
-
-/** Tokens you created, with their public supplies. */
-export function CreatedTokens({ tokens, version }: { tokens: TokenMeta[]; version: number }) {
-  const { program, provider } = usePrivateAccount();
-  const [rows, setRows] = useState<Row[]>([]);
+/** Tokens you created: total = private (inside the exchange) + SPL (in public wallets). */
+export function CreatedTokens({ tokens }: { tokens: TokenMeta[] }) {
+  const { provider } = usePrivateAccount();
+  const { pools } = usePools();
 
   const me = provider?.wallet.publicKey.toBase58();
-  const mine = tokens.filter((t) => t.creator === me && !t.isUsdc);
+  const lpMints = new Set(pools.map((p) => p.lpMint));
+  const mine = tokens.filter((t) => t.creator === me && !t.isUsdc && !lpMints.has(t.mint));
 
-  useEffect(() => {
-    if (!program || !provider || mine.length === 0) {
-      setRows([]);
-      return;
-    }
-    Promise.all(
-      mine.map(async (token) => {
-        const mint = new PublicKey(token.mint);
-        const [info, spl] = await Promise.all([
-          program.account.tokenInfo.fetch(pdas.tokenInfo(mint)),
-          getMint(provider.connection, mint, "confirmed", TOKEN_2022_PROGRAM_ID),
-        ]);
-        return { token, exchangeSupply: BigInt(info.exchangeSupply.toString()), splSupply: spl.supply };
-      }),
-    )
-      .then(setRows)
-      .catch(console.error);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [program, provider, tokens, version]);
+  const poolStatus = (mint: string) => {
+    const pool = pools.find((p) => p.tokenMint === mint);
+    if (pool?.active) return <Link href={`/pool/${mint}`} className="text-accent hover:underline">Live pool →</Link>;
+    return (
+      <Link href="/create/pool" className="text-muted hover:text-accent">
+        {pool ? "Add liquidity →" : "Create pool →"}
+      </Link>
+    );
+  };
 
   return (
-    <Card
-      title="Tokens you created"
-      subtitle="Supplies are public. Who holds how much is private."
-    >
-      {rows.length === 0 ? (
+    <Card title="Tokens you created" subtitle="Supplies are public. Who holds how much is private.">
+      {mine.length === 0 ? (
         <p className="text-sm text-muted">No tokens yet.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-muted">
-              <tr>
-                <th className="pb-3 font-medium">Token</th>
-                <th className="pb-3 text-right font-medium">Exchange supply</th>
-                <th className="pb-3 text-right font-medium">SPL supply</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {rows.map(({ token, exchangeSupply, splSupply }) => (
-                <tr key={token.mint}>
-                  <td className="py-3">
-                    <div className="flex items-center gap-3">
-                      <TokenIcon image={token.image} symbol={token.symbol} size={32} />
-                      <div>
-                        <p className="font-medium">{token.symbol}</p>
-                        <a href={explorerUrl(token.mint)} target="_blank" rel="noreferrer" className="text-xs text-muted hover:text-fg">
-                          {token.name} · {shortAddress(token.mint)}
-                        </a>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3 text-right font-mono">{formatAmount(exchangeSupply)}</td>
-                  <td className="py-3 text-right font-mono text-muted">{formatAmount(splSupply)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="divide-y divide-line">
+          {mine.map((token) => {
+            const privateSupply = BigInt(token.exchangeSupply ?? "0");
+            const splSupply = BigInt(token.splSupply ?? "0");
+            return (
+              <li key={token.mint} className="py-4">
+                <div className="flex items-center gap-3">
+                  <TokenIcon image={token.image} symbol={token.symbol} size={36} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold">{token.symbol}</p>
+                    <a href={explorerUrl(token.mint)} target="_blank" rel="noreferrer" className="text-xs text-muted hover:text-fg">
+                      {token.name} · {shortAddress(token.mint)}
+                    </a>
+                  </div>
+                  <div className="text-sm">{poolStatus(token.mint)}</div>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-bg/60 p-3 text-sm">
+                  <Supply label="Total supply" value={privateSupply + splSupply} />
+                  <Supply label="Private supply" value={privateSupply} hint="inside the exchange" />
+                  <Supply label="SPL supply" value={splSupply} hint="in public wallets" />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </Card>
+  );
+}
+
+function Supply({ label, value, hint }: { label: string; value: bigint; hint?: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted">{label}</p>
+      <p className="font-mono">{formatAmount(value)}</p>
+      {hint && <p className="text-[11px] text-muted/70">{hint}</p>}
+    </div>
   );
 }

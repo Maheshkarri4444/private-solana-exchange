@@ -100,17 +100,15 @@ pub fn mint_private_handler(
     let computation = ctx.accounts.computation_account.key();
     let eta = &mut ctx.accounts.eta;
 
-    // First use of this ETA: fill in who owns it and which key it is encrypted to.
-    if eta.owner == Pubkey::default() {
-        eta.owner = ctx.accounts.payer.key();
-        eta.mint = token_info.mint;
-        eta.enc_pubkey = ctx.accounts.user_account.enc_pubkey;
-        eta.bump = ctx.bumps.eta;
-    }
+    eta.init_if_new(
+        ctx.accounts.payer.key(),
+        token_info.mint,
+        ctx.accounts.user_account.enc_pubkey,
+        ctx.bumps.eta,
+    );
+    require!(!eta.is_frozen(), ErrorCode::AccountFrozen);
     require!(!eta.is_locked(slot), ErrorCode::AccountBusy);
-
-    eta.pending_computation = computation;
-    eta.pending_since_slot = slot;
+    eta.lock(computation, slot);
     eta.pending_amount = amount;
 
     let args = ArgBuilder::new()
@@ -211,9 +209,7 @@ pub fn credit_balance_callback_handler(
         ErrorCode::EncryptionKeyMismatch
     );
 
-    eta.balance_ct = result.ciphertexts[0];
-    eta.nonce = result.nonce;
-    eta.is_initialized = true;
+    eta.set_balance(result.ciphertexts[0], result.nonce);
 
     let token_info = &mut ctx.accounts.token_info;
     token_info.exchange_supply = token_info

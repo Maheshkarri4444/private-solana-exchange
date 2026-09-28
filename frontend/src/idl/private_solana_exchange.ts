@@ -14,6 +14,271 @@ export type PrivateSolanaExchange = {
   },
   "instructions": [
     {
+      "name": "cancelUnshield",
+      "docs": [
+        "Unfreeze an account whose move to wallet stopped before step 2."
+      ],
+      "discriminator": [
+        133,
+        146,
+        253,
+        2,
+        169,
+        131,
+        117,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true
+        },
+        {
+          "name": "eta",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "commitBalanceCallback",
+      "discriminator": [
+        16,
+        118,
+        11,
+        34,
+        73,
+        111,
+        199,
+        74
+      ],
+      "accounts": [
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "compDefAccount"
+        },
+        {
+          "name": "mxeAccount"
+        },
+        {
+          "name": "computationAccount"
+        },
+        {
+          "name": "clusterAccount"
+        },
+        {
+          "name": "instructionsSysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "eta",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "output",
+          "type": {
+            "defined": {
+              "name": "signedComputationOutputs",
+              "generics": [
+                {
+                  "kind": "type",
+                  "type": {
+                    "defined": {
+                      "name": "commitBalanceOutput"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "createPool",
+      "docs": [
+        "Create a token/USDC pool and its LP token. Creator only."
+      ],
+      "discriminator": [
+        233,
+        146,
+        209,
+        142,
+        207,
+        104,
+        64,
+        188
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mintAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenInfo",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_info.mint",
+                "account": "tokenInfo"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_info.mint",
+                "account": "tokenInfo"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lpMint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lpInfo",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lpMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "feeBps",
+          "type": "u16"
+        },
+        {
+          "name": "tokenSymbol",
+          "type": "string"
+        },
+        {
+          "name": "tokenUri",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "createToken",
       "docs": [
         "Create a token: real SPL mint with metadata, SPL supply 0."
@@ -198,6 +463,243 @@ export type PrivateSolanaExchange = {
       ]
     },
     {
+      "name": "debitBalanceCallback",
+      "discriminator": [
+        165,
+        230,
+        154,
+        5,
+        231,
+        198,
+        3,
+        232
+      ],
+      "accounts": [
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "compDefAccount"
+        },
+        {
+          "name": "mxeAccount"
+        },
+        {
+          "name": "computationAccount"
+        },
+        {
+          "name": "clusterAccount"
+        },
+        {
+          "name": "instructionsSysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "eta",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "output",
+          "type": {
+            "defined": {
+              "name": "signedComputationOutputs",
+              "generics": [
+                {
+                  "kind": "type",
+                  "type": {
+                    "defined": {
+                      "name": "debitBalanceOutput"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "finishUnshield",
+      "docs": [
+        "Move to wallet, step 3: Arcium subtracts the amount and unfreezes the account."
+      ],
+      "discriminator": [
+        225,
+        21,
+        120,
+        254,
+        61,
+        66,
+        78,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "eta",
+          "writable": true
+        },
+        {
+          "name": "signPdaAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  65,
+                  114,
+                  99,
+                  105,
+                  117,
+                  109,
+                  83,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114,
+                  65,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxeAccount"
+        },
+        {
+          "name": "mempoolAccount",
+          "writable": true
+        },
+        {
+          "name": "executingPool",
+          "writable": true
+        },
+        {
+          "name": "computationAccount",
+          "writable": true
+        },
+        {
+          "name": "compDefAccount"
+        },
+        {
+          "name": "clusterAccount",
+          "writable": true
+        },
+        {
+          "name": "poolAccount",
+          "writable": true,
+          "address": "G2sRWJvi3xoyh5k2gY49eG9L8YhAEWQPtNb1zb1GXTtC"
+        },
+        {
+          "name": "clockAccount",
+          "writable": true,
+          "address": "7EbMUTLo5DjdzbN7s8BXeZwXzEwNQb1hScfRvWg8a6ot"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        }
+      ],
+      "args": [
+        {
+          "name": "computationOffset",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initCommitBalanceCompDef",
+      "docs": [
+        "One-time setup: register the `commit_balance` MPC circuit."
+      ],
+      "discriminator": [
+        20,
+        231,
+        181,
+        87,
+        81,
+        239,
+        215,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxeAccount",
+          "writable": true
+        },
+        {
+          "name": "compDefAccount",
+          "writable": true
+        },
+        {
+          "name": "addressLookupTable",
+          "writable": true
+        },
+        {
+          "name": "lutProgram",
+          "address": "AddressLookupTab1e1111111111111111111111111"
+        },
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "circuitUrl",
+          "type": {
+            "option": "string"
+          }
+        }
+      ]
+    },
+    {
       "name": "initConfig",
       "docs": [
         "One-time setup: config + fake USDC mint."
@@ -337,6 +839,225 @@ export type PrivateSolanaExchange = {
         26,
         5,
         1
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxeAccount",
+          "writable": true
+        },
+        {
+          "name": "compDefAccount",
+          "writable": true
+        },
+        {
+          "name": "addressLookupTable",
+          "writable": true
+        },
+        {
+          "name": "lutProgram",
+          "address": "AddressLookupTab1e1111111111111111111111111"
+        },
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "circuitUrl",
+          "type": {
+            "option": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "initDebitBalanceCompDef",
+      "docs": [
+        "One-time setup: register the `debit_balance` MPC circuit."
+      ],
+      "discriminator": [
+        0,
+        137,
+        207,
+        201,
+        147,
+        190,
+        43,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxeAccount",
+          "writable": true
+        },
+        {
+          "name": "compDefAccount",
+          "writable": true
+        },
+        {
+          "name": "addressLookupTable",
+          "writable": true
+        },
+        {
+          "name": "lutProgram",
+          "address": "AddressLookupTab1e1111111111111111111111111"
+        },
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "circuitUrl",
+          "type": {
+            "option": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "initSeedPoolCompDef",
+      "docs": [
+        "One-time setup: register the `seed_pool` MPC circuit."
+      ],
+      "discriminator": [
+        81,
+        96,
+        238,
+        162,
+        251,
+        230,
+        135,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxeAccount",
+          "writable": true
+        },
+        {
+          "name": "compDefAccount",
+          "writable": true
+        },
+        {
+          "name": "addressLookupTable",
+          "writable": true
+        },
+        {
+          "name": "lutProgram",
+          "address": "AddressLookupTab1e1111111111111111111111111"
+        },
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "circuitUrl",
+          "type": {
+            "option": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "initSwapCompDef",
+      "docs": [
+        "One-time setup: register the `swap` MPC circuit."
+      ],
+      "discriminator": [
+        193,
+        180,
+        211,
+        206,
+        171,
+        241,
+        40,
+        211
       ],
       "accounts": [
         {
@@ -569,6 +1290,206 @@ export type PrivateSolanaExchange = {
       ]
     },
     {
+      "name": "openAccount",
+      "docs": [
+        "Open an empty encrypted account for a token (needed before a first swap)."
+      ],
+      "discriminator": [
+        101,
+        152,
+        91,
+        243,
+        176,
+        36,
+        189,
+        101
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "userAccount",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenInfo",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_info.mint",
+                "account": "tokenInfo"
+              }
+            ]
+          }
+        },
+        {
+          "name": "eta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "token_info.mint",
+                "account": "tokenInfo"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "prepareUnshield",
+      "docs": [
+        "Move to wallet, step 1: Arcium fingerprints the balance and freezes the account."
+      ],
+      "discriminator": [
+        244,
+        49,
+        9,
+        137,
+        30,
+        171,
+        201,
+        253
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "eta",
+          "writable": true
+        },
+        {
+          "name": "signPdaAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  65,
+                  114,
+                  99,
+                  105,
+                  117,
+                  109,
+                  83,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114,
+                  65,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxeAccount"
+        },
+        {
+          "name": "mempoolAccount",
+          "writable": true
+        },
+        {
+          "name": "executingPool",
+          "writable": true
+        },
+        {
+          "name": "computationAccount",
+          "writable": true
+        },
+        {
+          "name": "compDefAccount"
+        },
+        {
+          "name": "clusterAccount",
+          "writable": true
+        },
+        {
+          "name": "poolAccount",
+          "writable": true,
+          "address": "G2sRWJvi3xoyh5k2gY49eG9L8YhAEWQPtNb1zb1GXTtC"
+        },
+        {
+          "name": "clockAccount",
+          "writable": true,
+          "address": "7EbMUTLo5DjdzbN7s8BXeZwXzEwNQb1hScfRvWg8a6ot"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        }
+      ],
+      "args": [
+        {
+          "name": "computationOffset",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "registerUser",
       "docs": [
         "Store the caller's x25519 encryption key."
@@ -626,6 +1547,564 @@ export type PrivateSolanaExchange = {
           }
         }
       ]
+    },
+    {
+      "name": "seedPool",
+      "docs": [
+        "Add the creator's initial liquidity privately (encrypted amounts)."
+      ],
+      "discriminator": [
+        111,
+        214,
+        148,
+        46,
+        108,
+        2,
+        217,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "pool",
+          "docs": [
+            "Creator + status checked in the handler (stack limit)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenInfo",
+          "docs": [
+            "Checked in the handler (stack limit)."
+          ]
+        },
+        {
+          "name": "tokenMint"
+        },
+        {
+          "name": "tokenEta",
+          "docs": [
+            "Ownership checked in the handler (stack limit)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "usdcEta",
+          "docs": [
+            "Ownership checked in the handler (stack limit)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "lpEta",
+          "docs": [
+            "Must exist (see `open_account`).",
+            "Ownership checked in the handler (stack limit)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "lpInfo"
+        },
+        {
+          "name": "signPdaAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  65,
+                  114,
+                  99,
+                  105,
+                  117,
+                  109,
+                  83,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114,
+                  65,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxeAccount"
+        },
+        {
+          "name": "mempoolAccount",
+          "writable": true
+        },
+        {
+          "name": "executingPool",
+          "writable": true
+        },
+        {
+          "name": "computationAccount",
+          "writable": true
+        },
+        {
+          "name": "compDefAccount"
+        },
+        {
+          "name": "clusterAccount",
+          "writable": true
+        },
+        {
+          "name": "poolAccount",
+          "writable": true,
+          "address": "G2sRWJvi3xoyh5k2gY49eG9L8YhAEWQPtNb1zb1GXTtC"
+        },
+        {
+          "name": "clockAccount",
+          "writable": true,
+          "address": "7EbMUTLo5DjdzbN7s8BXeZwXzEwNQb1hScfRvWg8a6ot"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        }
+      ],
+      "args": [
+        {
+          "name": "computationOffset",
+          "type": "u64"
+        },
+        {
+          "name": "depositCt",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              2
+            ]
+          }
+        },
+        {
+          "name": "depositNonce",
+          "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "seedPoolCallback",
+      "discriminator": [
+        26,
+        109,
+        141,
+        178,
+        48,
+        132,
+        33,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "compDefAccount"
+        },
+        {
+          "name": "mxeAccount"
+        },
+        {
+          "name": "computationAccount"
+        },
+        {
+          "name": "clusterAccount"
+        },
+        {
+          "name": "instructionsSysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "tokenEta",
+          "writable": true
+        },
+        {
+          "name": "usdcEta",
+          "writable": true
+        },
+        {
+          "name": "lpEta",
+          "writable": true
+        },
+        {
+          "name": "lpInfo",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "output",
+          "type": {
+            "defined": {
+              "name": "signedComputationOutputs",
+              "generics": [
+                {
+                  "kind": "type",
+                  "type": {
+                    "defined": {
+                      "name": "seedPoolOutput"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "swap",
+      "docs": [
+        "Buy or sell privately (encrypted amount + slippage limit)."
+      ],
+      "discriminator": [
+        248,
+        198,
+        158,
+        145,
+        225,
+        117,
+        135,
+        200
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "tokenInfo"
+        },
+        {
+          "name": "tokenMint"
+        },
+        {
+          "name": "usdcEta",
+          "docs": [
+            "Must exist (see `open_account`)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenEta",
+          "docs": [
+            "Must exist (see `open_account`)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "signPdaAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  65,
+                  114,
+                  99,
+                  105,
+                  117,
+                  109,
+                  83,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114,
+                  65,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxeAccount"
+        },
+        {
+          "name": "mempoolAccount",
+          "writable": true
+        },
+        {
+          "name": "executingPool",
+          "writable": true
+        },
+        {
+          "name": "computationAccount",
+          "writable": true
+        },
+        {
+          "name": "compDefAccount"
+        },
+        {
+          "name": "clusterAccount",
+          "writable": true
+        },
+        {
+          "name": "poolAccount",
+          "writable": true,
+          "address": "G2sRWJvi3xoyh5k2gY49eG9L8YhAEWQPtNb1zb1GXTtC"
+        },
+        {
+          "name": "clockAccount",
+          "writable": true,
+          "address": "7EbMUTLo5DjdzbN7s8BXeZwXzEwNQb1hScfRvWg8a6ot"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        }
+      ],
+      "args": [
+        {
+          "name": "computationOffset",
+          "type": "u64"
+        },
+        {
+          "name": "isBuy",
+          "type": "bool"
+        },
+        {
+          "name": "orderCt",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              3
+            ]
+          }
+        },
+        {
+          "name": "orderNonce",
+          "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "swapCallback",
+      "discriminator": [
+        103,
+        125,
+        93,
+        121,
+        54,
+        18,
+        238,
+        141
+      ],
+      "accounts": [
+        {
+          "name": "arciumProgram",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "compDefAccount"
+        },
+        {
+          "name": "mxeAccount"
+        },
+        {
+          "name": "computationAccount"
+        },
+        {
+          "name": "clusterAccount"
+        },
+        {
+          "name": "instructionsSysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "usdcEta",
+          "writable": true
+        },
+        {
+          "name": "tokenEta",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "output",
+          "type": {
+            "defined": {
+              "name": "signedComputationOutputs",
+              "generics": [
+                {
+                  "kind": "type",
+                  "type": {
+                    "defined": {
+                      "name": "swapOutput"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unshield",
+      "docs": [
+        "Move to wallet, step 2: verify the ZK proof and mint real SPL tokens."
+      ],
+      "discriminator": [
+        21,
+        228,
+        55,
+        24,
+        194,
+        10,
+        21,
+        22
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true
+        },
+        {
+          "name": "eta",
+          "writable": true
+        },
+        {
+          "name": "tokenInfo",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "destination",
+          "docs": [
+            "Any token account of the owner for this mint (clients use the ATA)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mintAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "proof",
+          "type": {
+            "defined": {
+              "name": "groth16Proof"
+            }
+          }
+        }
+      ]
     }
   ],
   "accounts": [
@@ -666,6 +2145,19 @@ export type PrivateSolanaExchange = {
         77,
         62,
         75
+      ]
+    },
+    {
+      "name": "pool",
+      "discriminator": [
+        241,
+        154,
+        109,
+        4,
+        17,
+        177,
+        109,
+        188
       ]
     },
     {
@@ -736,6 +2228,32 @@ export type PrivateSolanaExchange = {
       ]
     },
     {
+      "name": "poolCreated",
+      "discriminator": [
+        202,
+        44,
+        41,
+        88,
+        104,
+        220,
+        157,
+        82
+      ]
+    },
+    {
+      "name": "poolUpdated",
+      "discriminator": [
+        218,
+        43,
+        210,
+        231,
+        127,
+        214,
+        72,
+        245
+      ]
+    },
+    {
       "name": "tokenCreated",
       "discriminator": [
         236,
@@ -746,6 +2264,45 @@ export type PrivateSolanaExchange = {
         78,
         147,
         172
+      ]
+    },
+    {
+      "name": "unshieldDebited",
+      "discriminator": [
+        112,
+        111,
+        163,
+        242,
+        238,
+        71,
+        197,
+        169
+      ]
+    },
+    {
+      "name": "unshieldReady",
+      "discriminator": [
+        74,
+        246,
+        93,
+        146,
+        227,
+        53,
+        156,
+        88
+      ]
+    },
+    {
+      "name": "unshielded",
+      "discriminator": [
+        141,
+        41,
+        20,
+        125,
+        56,
+        78,
+        86,
+        205
       ]
     },
     {
@@ -817,6 +2374,61 @@ export type PrivateSolanaExchange = {
       "code": 6010,
       "name": "encryptionKeyMismatch",
       "msg": "MPC result is encrypted to the wrong key"
+    },
+    {
+      "code": 6011,
+      "name": "invalidFee",
+      "msg": "Pool fee must be between 0.10% and 10%"
+    },
+    {
+      "code": 6012,
+      "name": "cannotPoolUsdc",
+      "msg": "USDC cannot have its own pool"
+    },
+    {
+      "code": 6013,
+      "name": "notPoolCreator",
+      "msg": "Only the token creator can create or seed its pool"
+    },
+    {
+      "code": 6014,
+      "name": "poolAlreadySeeded",
+      "msg": "This pool already has liquidity"
+    },
+    {
+      "code": 6015,
+      "name": "poolNotActive",
+      "msg": "This pool is not open for trading yet"
+    },
+    {
+      "code": 6016,
+      "name": "noBalance",
+      "msg": "You have no balance of this token yet"
+    },
+    {
+      "code": 6017,
+      "name": "invalidMint",
+      "msg": "Not a valid token mint"
+    },
+    {
+      "code": 6018,
+      "name": "wrongAccount",
+      "msg": "Account does not belong to this user or token"
+    },
+    {
+      "code": 6019,
+      "name": "accountFrozen",
+      "msg": "A move to your wallet is in progress on this account; finish or cancel it first"
+    },
+    {
+      "code": 6020,
+      "name": "wrongUnshieldStep",
+      "msg": "This step of the move to your wallet is not available right now"
+    },
+    {
+      "code": 6021,
+      "name": "invalidProof",
+      "msg": "The zero-knowledge proof is not valid"
     }
   ],
   "types": [
@@ -1087,6 +2699,57 @@ export type PrivateSolanaExchange = {
       }
     },
     {
+      "name": "commitBalanceOutput",
+      "docs": [
+        "The output of the callback instruction. Provided as a struct with ordered fields",
+        "as anchor does not support tuples and tuple structs yet."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field0",
+            "type": {
+              "defined": {
+                "name": "commitBalanceOutputStruct0"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "commitBalanceOutputStruct0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field0",
+            "type": {
+              "defined": {
+                "name": "sharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field1",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "computationDefinitionAccount",
       "docs": [
         "An account representing a [ComputationDefinition] in a MXE."
@@ -1268,6 +2931,32 @@ export type PrivateSolanaExchange = {
       }
     },
     {
+      "name": "debitBalanceOutput",
+      "docs": [
+        "The output of the callback instruction. Provided as a struct with ordered fields",
+        "as anchor does not support tuples and tuple structs yet."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field0",
+            "type": {
+              "defined": {
+                "name": "sharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "encryptedTokenAccount",
       "docs": [
         "Encrypted Token Account: one per (owner, mint). PDA(\"eta\", owner, mint).",
@@ -1347,11 +3036,50 @@ export type PrivateSolanaExchange = {
             "type": "u8"
           },
           {
+            "name": "unshieldState",
+            "type": "u8"
+          },
+          {
+            "name": "unshieldCommitment",
+            "docs": [
+              "SHA3-256(balance ‖ salt), published by Arcium. The ZK proof opens it."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "unshieldSaltCt",
+            "docs": [
+              "The salt, encrypted to the owner."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "unshieldSaltNonce",
+            "type": "u128"
+          },
+          {
+            "name": "unshieldAmount",
+            "docs": [
+              "Amount already minted to the wallet and waiting to be debited."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                128
+                39
               ]
             }
           }
@@ -1378,6 +3106,45 @@ export type PrivateSolanaExchange = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "groth16Proof",
+      "docs": [
+        "A Groth16 proof in the syscalls' (EIP-197) encoding: big-endian field",
+        "elements, G2 as x.c1 ‖ x.c0 ‖ y.c1 ‖ y.c0."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "a",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "b",
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "c",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
           }
         ]
       }
@@ -1563,6 +3330,41 @@ export type PrivateSolanaExchange = {
               "defined": {
                 "name": "epoch"
               }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "mxeEncryptedStruct",
+      "generics": [
+        {
+          "kind": "const",
+          "name": "len",
+          "type": "usize"
+        }
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "nonce",
+            "type": "u128"
+          },
+          {
+            "name": "ciphertexts",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                {
+                  "generic": "len"
+                }
+              ]
             }
           }
         ]
@@ -1836,6 +3638,336 @@ export type PrivateSolanaExchange = {
       }
     },
     {
+      "name": "pool",
+      "docs": [
+        "A token/USDC constant-product pool. PDA(\"pool\", token_mint).",
+        "",
+        "Reserves are encrypted to the Arcium cluster only. Price and a coarse health",
+        "score are public; Arcium sets both after every seed and swap."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "reservesCt",
+            "docs": [
+              "Encrypted {token, usdc} reserves. First field, so its byte offset is fixed at 8."
+            ],
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                2
+              ]
+            }
+          },
+          {
+            "name": "reservesNonce",
+            "type": "u128"
+          },
+          {
+            "name": "tokenMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "lpMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "feeBps",
+            "type": "u16"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "price",
+            "docs": [
+              "USDC per whole token, scaled by 1e12."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "health",
+            "docs": [
+              "Coarse 0–100 health score."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "swapCount",
+            "type": "u64"
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          },
+          {
+            "name": "lastTradeAt",
+            "type": "i64"
+          },
+          {
+            "name": "priceHistory",
+            "docs": [
+              "Ring buffer of recent public prices, oldest overwritten first."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "pricePoint"
+                  }
+                },
+                32
+              ]
+            }
+          },
+          {
+            "name": "historyLen",
+            "type": "u8"
+          },
+          {
+            "name": "historyHead",
+            "type": "u8"
+          },
+          {
+            "name": "pendingComputation",
+            "docs": [
+              "Computation account of the in-flight MPC job, default when idle."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pendingSinceSlot",
+            "type": "u64"
+          },
+          {
+            "name": "pendingKind",
+            "docs": [
+              "What the in-flight job is: 0 = seed, 1 = buy, 2 = sell."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "lpMintBump",
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "poolCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "tokenMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "lpMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "feeBps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "poolUpdated",
+      "docs": [
+        "Emitted when a seed or swap finishes. Price and health are public; amounts are not."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "kind",
+            "docs": [
+              "0 = seed, 1 = buy, 2 = sell."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "ok",
+            "type": "bool"
+          },
+          {
+            "name": "price",
+            "type": "u128"
+          },
+          {
+            "name": "health",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "pricePoint",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "price",
+            "type": "u128"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "seedPoolOutput",
+      "docs": [
+        "The output of the callback instruction. Provided as a struct with ordered fields",
+        "as anchor does not support tuples and tuple structs yet."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field0",
+            "type": {
+              "defined": {
+                "name": "seedPoolOutputStruct0"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "seedPoolOutputStruct0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field0",
+            "type": {
+              "defined": {
+                "name": "sharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field1",
+            "type": {
+              "defined": {
+                "name": "sharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field2",
+            "type": {
+              "defined": {
+                "name": "sharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field3",
+            "type": {
+              "defined": {
+                "name": "mxeEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "2"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field4",
+            "type": {
+              "defined": {
+                "name": "seedPoolOutputStruct04"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "seedPoolOutputStruct04",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field0",
+            "type": "bool"
+          },
+          {
+            "name": "field1",
+            "type": "f64"
+          },
+          {
+            "name": "field2",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "setUnset",
       "docs": [
         "Utility struct to store a value that needs to be set by a certain number of participants (keys",
@@ -1957,6 +4089,104 @@ export type PrivateSolanaExchange = {
       }
     },
     {
+      "name": "swapOutput",
+      "docs": [
+        "The output of the callback instruction. Provided as a struct with ordered fields",
+        "as anchor does not support tuples and tuple structs yet."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field0",
+            "type": {
+              "defined": {
+                "name": "swapOutputStruct0"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "swapOutputStruct0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field0",
+            "type": {
+              "defined": {
+                "name": "sharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field1",
+            "type": {
+              "defined": {
+                "name": "sharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field2",
+            "type": {
+              "defined": {
+                "name": "mxeEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "2"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field3",
+            "type": {
+              "defined": {
+                "name": "swapOutputStruct03"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "swapOutputStruct03",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field0",
+            "type": "bool"
+          },
+          {
+            "name": "field1",
+            "type": "f64"
+          },
+          {
+            "name": "field2",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "timestamp",
       "type": {
         "kind": "struct",
@@ -2041,6 +4271,75 @@ export type PrivateSolanaExchange = {
                 64
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "unshieldDebited",
+      "docs": [
+        "The encrypted balance was reduced by the unshielded amount."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "ok",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unshieldReady",
+      "docs": [
+        "Arcium published a fingerprint of the balance; the owner can now prove."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "ok",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unshielded",
+      "docs": [
+        "A ZK proof was accepted and `amount` real SPL tokens were minted to the wallet."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
           }
         ]
       }
@@ -2164,6 +4463,25 @@ export type PrivateSolanaExchange = {
       "value": "[101, 116, 97]"
     },
     {
+      "name": "initialLpSupply",
+      "docs": [
+        "LP minted to the creator when a pool is seeded: 1,000,000 LP (6 decimals).",
+        "Fixed on purpose — a √(token·usdc) supply would reveal the reserves."
+      ],
+      "type": "u64",
+      "value": "1000000000000"
+    },
+    {
+      "name": "lpMintSeed",
+      "type": "bytes",
+      "value": "[108, 112, 95, 109, 105, 110, 116]"
+    },
+    {
+      "name": "maxFeeBps",
+      "type": "u16",
+      "value": "1000"
+    },
+    {
       "name": "maxMintPerCall",
       "docs": [
         "Largest single mint request: 1 billion whole tokens (6 decimals)."
@@ -2175,6 +4493,19 @@ export type PrivateSolanaExchange = {
       "name": "mintAuthoritySeed",
       "type": "bytes",
       "value": "[109, 105, 110, 116, 95, 97, 117, 116, 104, 111, 114, 105, 116, 121]"
+    },
+    {
+      "name": "minFeeBps",
+      "docs": [
+        "Pool fee limits in basis points: 0.10% – 10%."
+      ],
+      "type": "u16",
+      "value": "10"
+    },
+    {
+      "name": "poolSeed",
+      "type": "bytes",
+      "value": "[112, 111, 111, 108]"
     },
     {
       "name": "tokenDecimals",

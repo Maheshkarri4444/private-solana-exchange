@@ -1,0 +1,6 @@
+node_modules
+# Setup outputs are big. Keep only the verifying key (baked into the program)
+# and the test proof used by the program's unit test.
+build/*
+!build/verification_key.json
+!build/fixture.json

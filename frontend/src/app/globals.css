@@ -1,35 +1,49 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0b0b10;
-  --card: #13131b;
-  --line: #24242f;
-  --fg: #ededf2;
-  --muted: #9b9bab;
-  --accent: #7c5cff;
-  --accent-strong: #6a47ff;
+  --bg: #07080c;
+  --card: #0e1017;
+  --card-2: #151823;
+  --line: #20242f;
+  --fg: #eceef4;
+  --muted: #8b91a4;
+  /* Launchpad green for buy / primary actions */
+  --accent: #3ee08f;
+  --accent-strong: #2fcb7d;
+  --accent-fg: #03170c;
+  /* Violet marks anything private */
+  --private: #9b7bff;
+  --danger: #ff5c7a;
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-card: var(--card);
+  --color-card-2: var(--card-2);
   --color-line: var(--line);
   --color-fg: var(--fg);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-strong: var(--accent-strong);
+  --color-accent-fg: var(--accent-fg);
+  --color-private: var(--private);
+  --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(1100px 520px at 0% -10%, rgb(62 224 143 / 0.07), transparent 60%),
+    radial-gradient(900px 480px at 100% 0%, rgb(155 123 255 / 0.09), transparent 60%),
+    var(--bg);
   color: var(--fg);
 }
 
-/* Match the wallet button to the app's accent. */
+/* Wallet adapter button, matched to the app. */
 .wallet-adapter-button-trigger {
   background-color: var(--accent) !important;
+  color: var(--accent-fg) !important;
   border-radius: 0.75rem !important;
   height: 40px !important;
   font-size: 0.875rem !important;

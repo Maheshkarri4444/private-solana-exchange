@@ -4,11 +4,15 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { type ReactNode, useState } from "react";
 import { usePrivateAccount } from "@/hooks/usePrivateAccount";
+import { explainError } from "@/lib/errors";
 import { SIGN_MESSAGE } from "@/lib/keys";
 import { Button, Card, Notice, Spinner } from "./ui";
 
-/** Renders children only once the wallet is connected, unlocked and registered. */
-export function AccountGate({ children }: { children: ReactNode }) {
+/**
+ * Renders children only once the wallet is connected, unlocked and registered.
+ * `inline` shows the steps inside the current section instead of a centered card.
+ */
+export function AccountGate({ children, inline = false }: { children: ReactNode; inline?: boolean }) {
   const { connected, publicKey } = useWallet();
   const { setVisible } = useWalletModal();
   const { keys, registered, keyMismatch, unlock, register } = usePrivateAccount();
@@ -21,7 +25,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
     try {
       await fn();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(explainError(e));
     } finally {
       setBusy(false);
     }
@@ -29,7 +33,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
 
   if (!connected) {
     return (
-      <GateCard title="Connect your wallet" text="Use any Solana wallet set to devnet.">
+      <GateCard inline={inline} title="Connect your wallet" text="Use any Solana wallet set to devnet.">
         <Button onClick={() => setVisible(true)}>Connect wallet</Button>
       </GateCard>
     );
@@ -46,6 +50,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
   if (!keys) {
     return (
       <GateCard
+        inline={inline}
         title="Unlock your private account"
         text={
           <>
@@ -66,6 +71,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
   if (!registered) {
     return (
       <GateCard
+        inline={inline}
         title="Create your private account"
         text="One transaction stores your encryption public key on-chain, so Arcium can encrypt balances for you."
         error={error}
@@ -100,18 +106,20 @@ export function AccountGate({ children }: { children: ReactNode }) {
 }
 
 function GateCard({
+  inline,
   title,
   text,
   error,
   children,
 }: {
+  inline: boolean;
   title: string;
   text: ReactNode;
   error?: string | null;
   children: ReactNode;
 }) {
   return (
-    <Card className="mx-auto max-w-lg">
+    <Card className={inline ? "border-dashed bg-transparent" : "mx-auto max-w-lg"}>
       <h2 className="text-xl font-semibold">{title}</h2>
       <p className="mt-2 mb-6 text-sm leading-relaxed text-muted">{text}</p>
       {children}

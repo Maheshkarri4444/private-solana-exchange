@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import { usePrivateAccount } from "@/hooks/usePrivateAccount";
 import { type CreateStep, createToken } from "@/lib/actions";
 import { explorerUrl } from "@/lib/config";
+import { explainError } from "@/lib/errors";
 import { formatAmount, parseAmount } from "@/lib/format";
 import { Button, Card, Field, Input, Notice, Spinner } from "./ui";
 
@@ -14,7 +15,7 @@ const STEPS: { key: CreateStep; label: string }[] = [
 ];
 
 export function CreateTokenForm({ onCreated }: { onCreated: () => void }) {
-  const { program, provider } = usePrivateAccount();
+  const { program, provider, send } = usePrivateAccount();
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [description, setDescription] = useState("");
@@ -57,6 +58,7 @@ export function CreateTokenForm({ onCreated }: { onCreated: () => void }) {
     try {
       const { mint, result } = await createToken(
         program,
+        send,
         provider.wallet.publicKey,
         {
           name: name.trim(),
@@ -70,7 +72,7 @@ export function CreateTokenForm({ onCreated }: { onCreated: () => void }) {
       setCreated({ mint: mint.toBase58(), ok: result === "credited" });
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(explainError(err));
       setStep(null);
     }
   }

@@ -2971,6 +2971,7 @@ dependencies = [
  "arcium-anchor",
  "arcium-client",
  "arcium-macros",
+ "solana-bn254",
 ]
 
 [[package]]

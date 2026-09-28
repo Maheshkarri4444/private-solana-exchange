@@ -1,12 +1,17 @@
 "use client";
 
-import { getTokenMetadata } from "@solana/spl-token";
-import { type Connection, PublicKey } from "@solana/web3.js";
+import { BN } from "@anchor-lang/core";
 import { useCallback, useEffect, useState } from "react";
-import { type TokenMeta, listTokens } from "@/lib/api";
+import { type EtaRecord, type TokenMeta, listEtas, listTokens } from "@/lib/api";
 import { decryptBalance } from "@/lib/arcium";
-import { ETA_OWNER_OFFSET } from "@/lib/program";
 import { usePrivateAccount } from "./usePrivateAccount";
+
+const CHANGED = "private-balances-changed";
+
+/** Tells every balances view on the page to reload (after a mint, swap, …). */
+export function notifyBalancesChanged() {
+  window.dispatchEvent(new Event(CHANGED));
+}
 
 export interface PrivateBalance {
   mint: string;
@@ -14,61 +19,43 @@ export interface PrivateBalance {
   /** An MPC job is still running on this account. */
   pending: boolean;
   token: TokenMeta | null;
+  /** The raw on-chain record (unshield state etc.). */
+  record: EtaRecord;
 }
 
-/** Fallback when a token is missing from the backend list: read its on-chain metadata. */
-async function onChainMeta(connection: Connection, mint: PublicKey): Promise<TokenMeta | null> {
-  const meta = await getTokenMetadata(connection, mint, "confirmed").catch(() => null);
-  if (!meta) return null;
-  return {
-    mint: mint.toBase58(),
-    creator: "",
-    name: meta.name,
-    symbol: meta.symbol,
-    uri: meta.uri,
-    image: null,
-    description: null,
-    maxSupply: "0",
-    isUsdc: meta.symbol === "USDC",
-    createdAt: "",
-  };
-}
-
-/** Loads every ETA the user owns and decrypts it locally. */
+/**
+ * Loads the user's encrypted token accounts from the backend index and
+ * decrypts them here. The backend only ever sees ciphertexts.
+ */
 export function useBalances() {
-  const { program, keys, mxePublicKey, provider } = usePrivateAccount();
+  const { keys, mxePublicKey, provider } = usePrivateAccount();
   const [balances, setBalances] = useState<PrivateBalance[]>([]);
   const [tokens, setTokens] = useState<TokenMeta[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const owner = provider?.wallet.publicKey;
+  const owner = provider?.wallet.publicKey.toBase58();
 
-  const refresh = useCallback(async () => {
-    if (!program || !keys || !mxePublicKey || !owner) return;
+  const load = useCallback(async () => {
+    if (!keys || !mxePublicKey || !owner) return;
     setLoading(true);
     setError(null);
     try {
-      const [etas, tokenList] = await Promise.all([
-        program.account.encryptedTokenAccount.all([
-          { memcmp: { offset: ETA_OWNER_OFFSET, bytes: owner.toBase58() } },
-        ]),
-        listTokens().catch(() => [] as TokenMeta[]),
-      ]);
-      const byMint = new Map(tokenList.map((t) => [t.mint, t]));
-
-      const next = await Promise.all(
-        etas.map(async ({ account }) => ({
-          mint: account.mint.toBase58(),
-          amount: account.isInitialized
-            ? decryptBalance(keys.privateKey, mxePublicKey, account.balanceCt, account.nonce)
-            : 0n,
-          pending: !account.pendingComputation.equals(PublicKey.default),
-          token:
-            byMint.get(account.mint.toBase58()) ??
-            (await onChainMeta(program.provider.connection, account.mint)),
-        })),
-      );
+      const [etas, tokenList] = await Promise.all([listEtas(owner), listTokens()]);
+      const next = etas.map((record) => ({
+        mint: record.mint,
+        amount: record.isInitialized
+          ? decryptBalance(
+              keys.privateKey,
+              mxePublicKey,
+              Array.from(Buffer.from(record.balanceCt, "base64")),
+              new BN(record.nonce),
+            )
+          : 0n,
+        pending: record.pending,
+        token: record.token,
+        record,
+      }));
       // USDC first, then by symbol.
       next.sort(
         (a, b) =>
@@ -82,11 +69,13 @@ export function useBalances() {
     } finally {
       setLoading(false);
     }
-  }, [program, keys, mxePublicKey, owner]);
+  }, [keys, mxePublicKey, owner]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    load();
+    window.addEventListener(CHANGED, load);
+    return () => window.removeEventListener(CHANGED, load);
+  }, [load]);
 
-  return { balances, tokens, loading, error, refresh };
+  return { balances, tokens, loading, error, refresh: notifyBalancesChanged };
 }

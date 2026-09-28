@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePrivateAccount } from "@/hooks/usePrivateAccount";
 import { mintPrivate } from "@/lib/actions";
 import { explorerTxUrl } from "@/lib/config";
+import { explainError } from "@/lib/errors";
 import { formatAmount, parseAmount } from "@/lib/format";
 import { pdas } from "@/lib/program";
 import { Button, Card, Field, Input, Notice } from "./ui";
@@ -18,7 +19,7 @@ type Status =
   | { kind: "error"; text: string };
 
 export function UsdcMinter({ onMinted }: { onMinted: () => void }) {
-  const { program, provider } = usePrivateAccount();
+  const { program, provider, send } = usePrivateAccount();
   const [amount, setAmount] = useState("1000");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
@@ -29,7 +30,7 @@ export function UsdcMinter({ onMinted }: { onMinted: () => void }) {
     if (!program || !provider || !parsed) return;
     setStatus({ kind: "sending" });
     try {
-      const pending = mintPrivate(program, provider.wallet.publicKey, pdas.usdcMint(), parsed);
+      const pending = mintPrivate(program, send, provider.wallet.publicKey, pdas.usdcMint(), parsed);
       // The tx confirms quickly; most of the wait is the MPC round trip.
       setTimeout(() => setStatus((s) => (s.kind === "sending" ? { kind: "mpc" } : s)), 4000);
       const { signature, result } = await pending;
@@ -42,7 +43,7 @@ export function UsdcMinter({ onMinted }: { onMinted: () => void }) {
       }
       onMinted();
     } catch (e) {
-      setStatus({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+      setStatus({ kind: "error", text: explainError(e) });
     }
   }
 

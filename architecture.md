@@ -22,7 +22,7 @@ Built on **Arcium** (computation on encrypted data) with **Umbra-style encrypted
  │  SOLANA PROGRAM             │        │  BACKEND  (Node.js)    │
  │  Anchor + Arcium MXE        │        │  • metadata → IPFS     │
  │  • users + token accounts   │        │    (Pinata)            │
- │  • faucet, create token     │        │  • token list          │
+ │  • faucet, create token     │        │  • account index       │
  │  • AMM pools, order book    │        │    (MongoDB)           │
  │  • ZK withdraw verifier     │        │  • order-matching      │
  └────────┬────────────▲───────┘        │    crank               │
@@ -48,9 +48,11 @@ Every private action is the same loop:
 | ------------------------------------- | ------------------------------------- |
 | Token list, names, images             | Every user's balance                  |
 | Total supply of each token            | Swap amounts                          |
-| Faucet / mint amounts                 | Pool reserves (so, the exact price)   |
-| Pools, their fee, total LP supply     | Each LP's share                       |
-| That an order exists, who placed it   | Order side, price and size            |
+| Faucet / mint amounts                 | Pool reserves                         |
+| Pool price, health score, fee         | Each LP's share                       |
+| Total LP supply, number of trades     | Order side, price and size            |
+| Whether a trade was a buy or a sell   |                                       |
+| That an order exists, who placed it   |                                       |
 | Who sent a transaction, and when      |                                       |
 | Amount moved out to a public wallet   |                                       |
 
@@ -124,7 +126,8 @@ ETA        address = PDA("eta", owner, mint)
 ├── nonce        16 bytes   new on every update
 ├── owner, mint
 ├── enc_pubkey   your x25519 public key
-└── pending job  lock while MPC works on this account
+├── pending job  lock while MPC works on this account
+└── unshield     move-to-wallet step, fingerprint, salt (encrypted)
 ```
 
 Other accounts:
@@ -155,6 +158,15 @@ the program simply never accepts a ciphertext from a user.
 - **The lock** stops two jobs from reading the same old balance and overwriting
   each other. A stuck lock expires after a timeout.
 - The callback checks the **cluster's BLS signature**, so nobody can fake an MPC result.
+
+**Reading state: the backend index.** The browser never scans the chain (public
+RPCs rate-limit that). The backend mirrors every program account into MongoDB:
+one snapshot at start, live websocket updates, and a re-check every 60 s.
+
+- It stores account **state**, not transactions. A failed transaction changes no
+  account, so it can never leave a wrong record.
+- A newer update always wins (compared by slot).
+- It only ever holds ciphertexts. Your key stays in your browser.
 
 ---
 
@@ -191,26 +203,56 @@ Creator panel: mint any amount. User panel: 30 USDC per click (later task).
 ## 8. Private AMM
 
 ```
-Pool
-├── public:   token, USDC, fee (e.g. 0.30%), total LP supply
+Pool                                   one per token, paired with USDC
+├── public:   price, health score, fee, total LP supply, trade count, price history
 └── private:  reserve_token, reserve_usdc     (encrypted to Arcium only)
 ```
 
-**Create a pool.** You pick the token amount, USDC amount and fee. MPC moves them
-from your ETAs into the pool and mints LP tokens into your LP ETA.
+**Create a pool** (creator only). Two steps:
 
-**Swap.** MPC checks your balance, takes the fee, computes the output with
-`x · y = k`, checks your slippage limit, then updates four ciphertexts: your two
-ETAs and the two reserves. **No real tokens move.**
+```
+1. create_pool   pool account + LP token (real SPL mint, supply 0)
+2. seed_pool     your deposit is encrypted in the browser → Arcium moves it
+                 from your ETAs into the pool → you get 1,000,000 LP (private)
+```
+
+The starting price is simply `USDC ÷ tokens` you put in.
+
+**Swap.** Your browser only knows the public price, so it sends an encrypted order:
+`{ amount_in, min_out, max_out }` — "about this much, at least that much".
+Arcium checks your balance and pays the **best amount in that range that keeps
+`x · y = k`**. It tries 17 evenly spaced amounts and keeps the largest that fits.
+**No real tokens move** — only four ciphertexts change: your two ETAs and the two reserves.
+
+**Example.** Pool `500,000 ROCK + 1,000 USDC`, price `0.002`. You buy with 20 USDC,
+5% slippage → range `9,471 … 9,970 ROCK`. The exact best is 9,774; Arcium pays
+**9,751.9** (the largest step that fits). The price moves to `0.00208`.
+
+> **Why try amounts instead of dividing?** Dividing secret numbers inside MPC runs
+> bit by bit — the first version of this circuit was 4× over Arcium's cost limit.
+> Checking `out · (reserve_in + in) ≤ reserve_out · in` is just a multiply and a compare.
+> Uniswap V2's pool contract uses the same trick.
 
 **Why reserves must be private.** If they were public, anyone could compare them
 before and after your swap — the difference *is* your trade size.
 
-**How you see a price.** A `quote` MPC job returns the expected output encrypted
-to you. Only you see it.
+**The price is public.** Arcium publishes the new price after every trade. The
+trade-off: a price move shows a trade's *relative* size ("about 2% of the pool"),
+never its amount.
+
+**Health score (public, 0–100).** Arcium computes it from the hidden reserves:
+
+| Factor | Tiers |
+| --- | --- |
+| Depth: USDC in the pool | 50 · 250 · 1,000 · 5,000 USDC |
+| Liquidity vs market cap | 5% · 10% · 25% · 50% |
+
+Each tier passed adds 12.5 points → Risky · Weak · Fair · Healthy. It is coarse on
+purpose: an exact number, combined with the public price, would reveal the reserves.
 
 **LP tokens** are a real SPL mint too, with balances in ETAs. Each LP's share is
-private; the total LP supply is public.
+private; the total LP supply is public. The first LP supply is fixed at
+1,000,000 — the usual `√(token · USDC)` would, together with the price, reveal the reserves.
 
 **Fees go to LPs automatically.** The fee stays inside the pool, so every LP token
 is backed by more over time.
@@ -252,23 +294,35 @@ Your tokens live in ETAs. To move some into your normal wallet you **prove in
 zero-knowledge** that you have enough, and the program mints real SPL tokens to you.
 
 ```
-1. Prepare  (MPC)      lock ETA, publish fingerprint = SHA3(balance ‖ salt),
-                       send you the salt (encrypted)
+1. Prepare  (MPC)      publish fingerprint = SHA3-256(balance ‖ salt),
+                       send you the salt (encrypted), freeze the ETA
 2. Prove    (browser)  Groth16 proof: "the balance inside this fingerprint ≥ amount"
-3. Withdraw (program)  verify proof → mint `amount` real tokens to your wallet
-                       → MPC subtracts `amount` → unlock
+3. Withdraw (program)  verify the proof → mint `amount` real tokens to your wallet
+   Finish   (MPC)      subtract `amount` from your ETA → unfreeze
 ```
 
-**Example.** Balance 250, you withdraw 100. The chain sees a fingerprint and a valid
-proof of "≥ 100" — never 250. Your wallet gets 100 real tokens; your ETA now holds 150.
+Steps 3 and "Finish" go in one transaction. If the MPC part fails, "Finish" can be
+sent again. Before step 3 you can cancel; nothing has moved yet.
 
-- **Fingerprint = hash commitment.** The random salt hides the balance; the hash
-  locks it in, so you can't prove a different number.
+**Example.** Balance 250, you withdraw 100. The chain sees a fingerprint and a valid
+proof of "≥ 100", never 250. Your wallet gets 100 real tokens; your ETA now holds 150.
+
+- **Fingerprint = hash commitment.** The random 128-bit salt hides the balance; the
+  hash locks it in, so you can't prove a different number.
+- **The proof** (`zk/circuits/unshield.circom`, ~160k constraints). Public: the
+  fingerprint and the amount. Private: balance and salt. It checks
+  `SHA3(balance ‖ salt) == fingerprint` and `0 < amount ≤ balance`.
 - **Why SHA3?** Rescue ciphertexts live in a different number field than ZK proofs.
   SHA3 runs both inside Arcium MPC and inside ZK circuits, so it is the bridge.
-- **Checked on-chain** with Solana's `alt_bn128` syscalls (Groth16 on BN254).
-- **Deposit back (public → private):** burn real tokens from your wallet, MPC credits
-  your ETA. The amount is visible — it was in a public wallet anyway.
+- **Frozen until done.** Between steps 1 and 3 no trade or mint can touch the
+  balance, so the fingerprint stays true.
+- **One proof, one use.** The fingerprint is wiped after step 3, and a new prepare
+  uses a new salt, so an old proof never verifies again.
+- **Checked on-chain** with Solana's `alt_bn128` syscalls (Groth16 on BN254, ~100k CU).
+- **Trusted setup.** Groth16 needs one. This demo ran it on one machine; a real
+  launch would use a multi-party ceremony.
+- **Deposit back (public → private)** comes later: burn tokens from your wallet,
+  MPC credits your ETA.
 
 ---
 
@@ -280,14 +334,15 @@ proof of "≥ 100" — never 250. Your wallet gets 100 real tokens; your ETA now
 | MPC      | Arcium devnet, cluster 456                                            |
 | Frontend | Next.js 16, Solana wallet adapter, `@arcium-hq/client`, `@noble/hashes` |
 | Backend  | Express, MongoDB, Pinata (IPFS)                                       |
-| ZK       | circom + snarkjs (Groth16), on-chain verifier                         |
+| ZK       | circom 2.2 + snarkjs 0.7 (Groth16), SHA3 from bkomuves/hash-circuits, verifier on `alt_bn128` |
 
 ---
 
 ## 12. Build order
 
-1. ✅ **Keys, ETAs, fake USDC, create token** — creator page (live on devnet)
-2. AMM — create pool, swap, add / remove liquidity
-3. User panel — faucet limit, swap UI
+1. ✅ **Keys, ETAs, fake USDC, create token** (live on devnet)
+2. ✅ **AMM + user panel** — create pool, buy / sell, price chart, health, 30 USDC faucet (live on devnet)
+3. ✅ **Move to wallet with a ZK proof** + backend account index (no chain scans)
 4. Order book
-5. ZK withdraw + deposit
+5. Add / remove liquidity for other LPs
+6. Deposit back (public → private)

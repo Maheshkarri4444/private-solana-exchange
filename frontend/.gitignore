@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 !.env.example
+
+# ZK proving key (~90 MB): copied in by zk/scripts/export.mjs, hosted on IPFS for deploys
+/public/zk/unshield.zkey

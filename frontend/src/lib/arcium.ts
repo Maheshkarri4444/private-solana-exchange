@@ -43,7 +43,19 @@ export async function fetchMxePublicKey(provider: AnchorProvider): Promise<Uint8
   return key;
 }
 
-/** Decrypts one balance ciphertext: x25519 shared secret → Rescue key → decrypt. */
+/** Encrypts amounts for Arcium with the user's key (fresh random nonce every time). */
+export function encryptValues(
+  privateKey: Uint8Array,
+  mxePublicKey: Uint8Array,
+  values: bigint[],
+): { ct: number[][]; nonce: BN } {
+  const cipher = new RescueCipher(x25519.getSharedSecret(privateKey, mxePublicKey));
+  const nonce = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  return { ct: cipher.encrypt(values, nonce), nonce: new BN(nonce, "le") };
+}
+
+/** Decrypts one value Arcium encrypted to us (a balance, a salt):
+ *  x25519 shared secret → Rescue key → decrypt. */
 export function decryptBalance(
   privateKey: Uint8Array,
   mxePublicKey: Uint8Array,

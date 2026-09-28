@@ -1,12 +1,22 @@
+pub mod create_pool;
 pub mod create_token;
 pub mod init_comp_def;
 pub mod init_config;
 pub mod mint_private;
+pub mod open_account;
 pub mod register_user;
+pub mod seed_pool;
 pub mod shared;
+pub mod swap;
+pub mod unshield;
 
+pub use create_pool::*;
 pub use create_token::*;
 pub use init_comp_def::*;
 pub use init_config::*;
 pub use mint_private::*;
+pub use open_account::*;
 pub use register_user::*;
+pub use seed_pool::*;
+pub use swap::*;
+pub use unshield::*;
