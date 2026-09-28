@@ -59,6 +59,24 @@ export interface PoolRecord {
   history: { price: string; time: number }[];
 }
 
+/** A private order book. Which slots hold an order (and whose) is public; the orders are not. */
+export interface BookRecord {
+  address: string;
+  tokenMint: string;
+  creator: string;
+  initialized: boolean;
+  slots: { owner: string | null; seq: number }[];
+  ordersPlaced: number;
+  createdAt: number;
+  lastActivityAt: number;
+  busy: boolean;
+  token: TokenMeta | null;
+  /** The pool's public price (USDC per token × 1e12), as a reference, if a pool exists. */
+  poolPrice: string | null;
+  /** Each owner's encrypted copy of their order, by slot. */
+  views: { ciphertexts: string[]; nonce: string }[];
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BACKEND_URL}${path}`, init);
   if (!res.ok) {
@@ -105,4 +123,14 @@ export function syncAccounts(addresses: string[]): Promise<void> {
     () => undefined,
     () => undefined, // best effort: the live push catches up anyway
   );
+}
+
+export const listBooks = () => request<BookRecord[]>("/api/books");
+
+export async function getBook(mint: string): Promise<BookRecord | null> {
+  try {
+    return await request<BookRecord>(`/api/books/${mint}`);
+  } catch {
+    return null;
+  }
 }

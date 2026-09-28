@@ -15,7 +15,7 @@ import { Button, Card, Notice, Spinner } from "./ui";
 export function AccountGate({ children, inline = false }: { children: ReactNode; inline?: boolean }) {
   const { connected, publicKey } = useWallet();
   const { setVisible } = useWalletModal();
-  const { keys, registered, keyMismatch, unlock, register } = usePrivateAccount();
+  const { keys, registered, keyMismatch, unlocking, unlockError, unlock, register } = usePrivateAccount();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,6 +47,26 @@ export function AccountGate({ children, inline = false }: { children: ReactNode;
     );
   }
 
+  if (!keys && unlocking) {
+    return (
+      <GateCard
+        inline={inline}
+        title="Check your wallet"
+        text={
+          <>
+            Sign <code className="text-fg">&quot;{SIGN_MESSAGE}&quot;</code> to unlock your private
+            account. Your browser turns that signature into your encryption key. It costs no gas.
+          </>
+        }
+      >
+        <div className="flex items-center gap-2 text-sm text-muted">
+          <Spinner /> Waiting for your signature…
+        </div>
+      </GateCard>
+    );
+  }
+
+  // Only seen if the signature was rejected (or balances were locked from the menu).
   if (!keys) {
     return (
       <GateCard
@@ -59,7 +79,7 @@ export function AccountGate({ children, inline = false }: { children: ReactNode;
             gas.
           </>
         }
-        error={error}
+        error={error ?? unlockError}
       >
         <Button loading={busy} onClick={run(unlock)}>
           Sign to unlock

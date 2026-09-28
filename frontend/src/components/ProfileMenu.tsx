@@ -79,7 +79,7 @@ export function ProfileMenu() {
           <Item href="/create/pool" icon="💧">
             Create liquidity pool
           </Item>
-          <Item href="/create/orderbook" icon="📖" soon>
+          <Item href="/create/orderbook" icon="📖">
             Create order book
           </Item>
           <hr className="my-2 border-line" />

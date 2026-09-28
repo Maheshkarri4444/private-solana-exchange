@@ -78,3 +78,27 @@ pub struct UnshieldDebited {
     pub mint: Pubkey,
     pub ok: bool,
 }
+
+/// An order joined the book. Its side, price and size stay encrypted.
+#[event]
+pub struct OrderPlaced {
+    pub book: Pubkey,
+    pub owner: Pubkey,
+    pub slot: u8,
+}
+
+/// An order was refused (not enough balance, or a zero price / size).
+#[event]
+pub struct OrderRejected {
+    pub book: Pubkey,
+    pub owner: Pubkey,
+}
+
+/// An owner collected their fills, or cancelled (`cancelled`) and got the rest back.
+#[event]
+pub struct OrderSettled {
+    pub book: Pubkey,
+    pub owner: Pubkey,
+    pub slot: u8,
+    pub cancelled: bool,
+}

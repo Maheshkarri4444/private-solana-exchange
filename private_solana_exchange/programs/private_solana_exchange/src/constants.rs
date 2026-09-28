@@ -53,3 +53,21 @@ pub const COMP_DEF_OFFSET_SEED_POOL: u32 = comp_def_offset("seed_pool");
 pub const COMP_DEF_OFFSET_SWAP: u32 = comp_def_offset("swap");
 pub const COMP_DEF_OFFSET_COMMIT_BALANCE: u32 = comp_def_offset("commit_balance");
 pub const COMP_DEF_OFFSET_DEBIT_BALANCE: u32 = comp_def_offset("debit_balance");
+pub const COMP_DEF_OFFSET_PLACE_ORDER: u32 = comp_def_offset("place_order");
+pub const COMP_DEF_OFFSET_SETTLE_ORDER: u32 = comp_def_offset("settle_order");
+
+#[constant]
+pub const BOOK_SEED: &[u8] = b"book";
+#[constant]
+pub const BOOK_VIEWS_SEED: &[u8] = b"book_views";
+
+/// Resting orders per book (must match BOOK_SLOTS in the circuits). The whole
+/// book goes through one callback transaction, which caps its size.
+pub const BOOK_SLOTS: usize = 8;
+/// The packed, encrypted book: 8 slots fit in 8 ciphertexts.
+pub const BOOK_CTS: usize = 8;
+/// An owner's packed copy of their order: 1 ciphertext.
+pub const VIEW_CTS: usize = 1;
+/// Open orders one wallet may have in one book, so nobody can fill it alone.
+#[constant]
+pub const MAX_ORDERS_PER_USER: u8 = 3;

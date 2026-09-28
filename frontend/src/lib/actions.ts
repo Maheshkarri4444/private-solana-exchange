@@ -373,6 +373,7 @@ export async function unshield(
   mint: PublicKey,
   amount: bigint,
   onStep: (step: UnshieldStep) => void,
+  onDownload?: (fraction: number) => void,
 ): Promise<{ signature: string; debited: boolean }> {
   const eta = pdas.eta(owner, mint);
   let account = await fetchEta(program, eta);
@@ -395,12 +396,15 @@ export async function unshield(
   }
 
   onStep("prove");
-  const proof = await proveUnshield({
-    fingerprint: account.unshieldCommitment,
-    balance: decryptBalance(keys.privateKey, mxePublicKey, account.balanceCt, account.nonce),
-    salt: decryptBalance(keys.privateKey, mxePublicKey, account.unshieldSaltCt, account.unshieldSaltNonce),
-    amount,
-  });
+  const proof = await proveUnshield(
+    {
+      fingerprint: account.unshieldCommitment,
+      balance: decryptBalance(keys.privateKey, mxePublicKey, account.balanceCt, account.nonce),
+      salt: decryptBalance(keys.privateKey, mxePublicKey, account.unshieldSaltCt, account.unshieldSaltNonce),
+      amount,
+    },
+    onDownload,
+  );
 
   onStep("mint");
   const destination = getAssociatedTokenAddressSync(mint, owner, false, TOKEN_2022_PROGRAM_ID);
@@ -449,4 +453,87 @@ export async function cancelUnshield(program: ExchangeProgram, send: Send, owner
   const tx = await program.methods.cancelUnshield().accountsPartial({ owner, eta }).transaction();
   await send(tx);
   await sync(eta);
+}
+
+/** Opens a private TOKEN/USDC order book (the token's creator only). */
+export async function createOrderBook(program: ExchangeProgram, send: Send, creator: PublicKey, tokenMint: PublicKey) {
+  const tx = await program.methods
+    .createOrderBook()
+    .accountsPartial({ creator, tokenInfo: pdas.tokenInfo(tokenMint) })
+    .transaction();
+  const signature = await send(tx);
+  const book = pdas.book(tokenMint);
+  await sync(book, pdas.bookViews(book));
+  return signature;
+}
+
+/** Waits until Arcium answered this book action (its lock is released or replaced). */
+async function waitForBook(program: ExchangeProgram, book: PublicKey, computation: PublicKey) {
+  const account = await waitFor(
+    program,
+    book,
+    () => program.account.orderBook.fetch(book),
+    (b) => !b.pendingComputation.equals(computation),
+  );
+  if (!account) throw new Error("Arcium is taking longer than usual. Refresh in a minute; your funds are safe.");
+  return account;
+}
+
+/**
+ * Places a private limit order. Side, price and size are encrypted here; Arcium
+ * locks the funds from your private balance, adds the order to the book and
+ * matches it. Anything that fills right away lands in your balances.
+ */
+export async function placeOrder(
+  program: ExchangeProgram,
+  send: Send,
+  owner: PublicKey,
+  keys: PrivateKeys,
+  mxePublicKey: Uint8Array,
+  input: { tokenMint: PublicKey; usdcMint: PublicKey; isBuy: boolean; price: bigint; lots: bigint },
+): Promise<{ ok: boolean; signature: string }> {
+  const book = pdas.book(input.tokenMint);
+  const usdcEta = pdas.eta(owner, input.usdcMint);
+  const tokenEta = pdas.eta(owner, input.tokenMint);
+  const before = await program.account.orderBook.fetch(book);
+  const openIxs = await openMissingAccounts(program, owner, [input.tokenMint, input.usdcMint]);
+  const order = encryptValues(keys.privateKey, mxePublicKey, [input.isBuy ? 1n : 0n, input.price, input.lots]);
+  const computationOffset = newComputationOffset();
+  const arcium = arciumAccounts("place_order", computationOffset);
+
+  const tx = await program.methods
+    .placeOrder(computationOffset, order.ct, order.nonce)
+    .accountsPartial({ payer: owner, config: pdas.config(), book, usdcEta, tokenEta, ...arcium })
+    .preInstructions(openIxs)
+    .transaction();
+  const signature = await send(tx);
+
+  const after = await waitForBook(program, book, arcium.computationAccount);
+  await sync(book, pdas.bookViews(book), usdcEta, tokenEta);
+  // A rejected order (not enough balance) leaves the book as it was.
+  return { ok: after.ordersPlaced.gt(before.ordersPlaced), signature };
+}
+
+/** Collects an order's fills into your balances; `cancel` also returns what is still locked. */
+export async function settleOrder(
+  program: ExchangeProgram,
+  send: Send,
+  owner: PublicKey,
+  input: { tokenMint: PublicKey; usdcMint: PublicKey; slot: number; cancel: boolean },
+): Promise<string> {
+  const book = pdas.book(input.tokenMint);
+  const usdcEta = pdas.eta(owner, input.usdcMint);
+  const tokenEta = pdas.eta(owner, input.tokenMint);
+  const computationOffset = newComputationOffset();
+  const arcium = arciumAccounts("settle_order", computationOffset);
+
+  const tx = await program.methods
+    .settleOrder(computationOffset, input.slot, input.cancel)
+    .accountsPartial({ payer: owner, config: pdas.config(), book, usdcEta, tokenEta, ...arcium })
+    .transaction();
+  const signature = await send(tx);
+
+  await waitForBook(program, book, arcium.computationAccount);
+  await sync(book, pdas.bookViews(book), usdcEta, tokenEta);
+  return signature;
 }

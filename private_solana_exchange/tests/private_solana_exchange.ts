@@ -12,6 +12,7 @@ import {
 import {
   RescueCipher,
   awaitComputationFinalization,
+  createPacker,
   getArciumEnv,
   getArciumProgram,
   getClusterAccAddress,
@@ -837,6 +838,219 @@ describe("private exchange: encrypted token accounts", () => {
     // Unfrozen and untouched: minting works again.
     await mintPrivate(bob, usdcMint, 1n * USDC);
     expect(await readBalance(bob.publicKey, usdcMint, bobKeys.privateKey)).to.equal(before + 1n * USDC);
+  });
+
+  // ------------------------------ private order book ------------------------------
+
+  const LOT = 1_000_000n; // 1 whole token
+  const bookPda = (mint: PublicKey) => pda(Buffer.from("book"), mint.toBuffer());
+  const viewsPda = (book: PublicKey) => pda(Buffer.from("book_views"), book.toBuffer());
+  const u = (width: number) => ({ Integer: { signed: false, width } }) as const;
+  /** An owner's copy of their order arrives packed into 1 ciphertext. */
+  type View = { is_buy: boolean; price: bigint; lots: bigint; remaining: bigint };
+  const viewPacker = createPacker<View, View>(
+    [
+      { name: "is_buy", type: "Bool" },
+      { name: "price", type: u(64) },
+      { name: "lots", type: u(32) },
+      { name: "remaining", type: u(32) },
+    ] as const,
+    "OrderView",
+  );
+
+  async function placeOrder(user: Keypair, keys: typeof aliceKeys, mint: PublicKey, isBuy: boolean, price: bigint, lots: bigint) {
+    const pre = [];
+    for (const m of [mint, usdcMint]) {
+      if (!(await provider.connection.getAccountInfo(etaPda(user.publicKey, m)))) {
+        pre.push(await openAccountIx(user.publicKey, m));
+      }
+    }
+    const order = encryptValues(keys, [isBuy ? 1n : 0n, price, lots]);
+    const offset = new BN(randomBytes(8), "hex");
+    await program.methods
+      .placeOrder(offset, order.ct, order.nonce)
+      .accountsPartial({
+        payer: user.publicKey,
+        config: configPda,
+        book: bookPda(mint),
+        usdcEta: etaPda(user.publicKey, usdcMint),
+        tokenEta: etaPda(user.publicKey, mint),
+        ...arciumAccounts("place_order", offset),
+      })
+      .preInstructions(pre)
+      .signers([user])
+      .rpc({ commitment: "confirmed" });
+    await awaitComputationFinalization(provider, offset, program.programId, "confirmed");
+  }
+
+  async function settleOrder(user: Keypair, mint: PublicKey, slot: number, cancel: boolean) {
+    const offset = new BN(randomBytes(8), "hex");
+    await program.methods
+      .settleOrder(offset, slot, cancel)
+      .accountsPartial({
+        payer: user.publicKey,
+        config: configPda,
+        book: bookPda(mint),
+        usdcEta: etaPda(user.publicKey, usdcMint),
+        tokenEta: etaPda(user.publicKey, mint),
+        ...arciumAccounts("settle_order", offset),
+      })
+      .signers([user])
+      .rpc({ commitment: "confirmed" });
+    await awaitComputationFinalization(provider, offset, program.programId, "confirmed");
+  }
+
+  /** Decrypts the owner's copy of the order in `slot`, like the browser does. */
+  async function myOrder(keys: typeof aliceKeys, mint: PublicKey, slot: number) {
+    const views = await program.account.orderViews.fetch(viewsPda(bookPda(mint)));
+    const cipher = new RescueCipher(x25519.getSharedSecret(keys.privateKey, mxePublicKey));
+    const nonce = new Uint8Array(views.nonces[slot].toArrayLike(Buffer, "le", 16));
+    return viewPacker.unpack(cipher.decrypt(views.views[slot].map((c) => Array.from(c)), nonce));
+  }
+
+  const bookState = () => program.account.orderBook.fetch(bookPda(memeMint.publicKey));
+  const balances = async (user: Keypair, keys: typeof aliceKeys) => ({
+    usdc: await readBalance(user.publicKey, usdcMint, keys.privateKey),
+    meme: await readBalance(user.publicKey, memeMint.publicKey, keys.privateKey),
+  });
+
+  it("sets up the order book circuits", async () => {
+    const mxeAccount = getMXEAccAddress(program.programId);
+    const mxe = await getArciumProgram(provider).account.mxeAccount.fetch(mxeAccount);
+    const accounts = (circuit: string) => ({
+      payer: alice.publicKey,
+      mxeAccount,
+      compDefAccount: arciumAccounts(circuit, new BN(0)).compDefAccount,
+      addressLookupTable: getLookupTableAddress(program.programId, mxe.lutOffsetSlot),
+    });
+    await program.methods.initPlaceOrderCompDef(null).accountsPartial(accounts("place_order")).rpc({ commitment: "confirmed" });
+    await program.methods.initSettleOrderCompDef(null).accountsPartial(accounts("settle_order")).rpc({ commitment: "confirmed" });
+    for (const circuit of ["place_order", "settle_order"]) {
+      await uploadCircuit(provider, circuit, program.programId, fs.readFileSync(`build/${circuit}.arcis`), false, 500, {
+        skipPreflight: true,
+        preflightCommitment: "confirmed",
+        commitment: "confirmed",
+      });
+    }
+  });
+
+  it("only the token's creator can open its order book, and not for USDC", async () => {
+    const create = (user: Keypair, mint: PublicKey) =>
+      program.methods
+        .createOrderBook()
+        .accountsPartial({ creator: user.publicKey, tokenInfo: tokenInfoPda(mint) })
+        .signers([user])
+        .rpc({ commitment: "confirmed" });
+    try {
+      await create(bob, memeMint.publicKey);
+      expect.fail("bob opened a book for alice's token");
+    } catch (e: any) {
+      expect(String(e)).to.match(/NotTokenCreator/);
+    }
+    try {
+      await create(alice, usdcMint);
+      expect.fail("opened a USDC/USDC book");
+    } catch (e: any) {
+      expect(String(e)).to.match(/InvalidMarket/);
+    }
+  });
+
+  it("opens a private MEME/USDC order book", async () => {
+    await program.methods
+      .createOrderBook()
+      .accountsPartial({ creator: alice.publicKey, tokenInfo: tokenInfoPda(memeMint.publicKey) })
+      .rpc({ commitment: "confirmed" });
+    const book = await bookState();
+    expect(book.tokenMint.toBase58()).to.equal(memeMint.publicKey.toBase58());
+    expect(book.initialized).to.equal(false);
+    expect(book.seqs.every((q) => q.isZero())).to.equal(true);
+  });
+
+  it("a resting sell locks tokens; its side, price and size stay hidden", async () => {
+    const before = await balances(alice, aliceKeys);
+    const etaBefore = await program.account.encryptedTokenAccount.fetch(etaPda(alice.publicKey, usdcMint));
+
+    await placeOrder(alice, aliceKeys, memeMint.publicKey, false, 2500n, 1000n); // sell 1,000 @ 0.0025
+
+    const book = await bookState();
+    expect(book.initialized).to.equal(true);
+    expect(book.owners[0].toBase58()).to.equal(alice.publicKey.toBase58());
+    expect(book.seqs[0].toString()).to.equal("1");
+    const order = await myOrder(aliceKeys, memeMint.publicKey, 0);
+    expect(order).to.deep.include({ is_buy: false, price: 2500n, lots: 1000n, remaining: 1000n });
+
+    const after = await balances(alice, aliceKeys);
+    expect(after.meme).to.equal(before.meme - 1000n * LOT);
+    expect(after.usdc).to.equal(before.usdc);
+    // Both balances were rewritten, so the chain can't tell this was a sell.
+    const etaAfter = await program.account.encryptedTokenAccount.fetch(etaPda(alice.publicKey, usdcMint));
+    expect(etaAfter.nonce.toString()).to.not.equal(etaBefore.nonce.toString());
+  });
+
+  it("a crossing buy fills at the resting price and is paid out at once", async () => {
+    await mintPrivate(bob, usdcMint, 10n * USDC);
+    const before = await balances(bob, bobKeys);
+
+    // Buy 400 with a 0.003 limit: fills against the 0.0025 sell, at 0.0025.
+    await placeOrder(bob, bobKeys, memeMint.publicKey, true, 3000n, 400n);
+
+    const after = await balances(bob, bobKeys);
+    expect(after.meme).to.equal(before.meme + 400n * LOT);
+    expect(after.usdc).to.equal(before.usdc - 400n * 2500n); // 1.00 USDC, not the 1.20 locked
+    const order = await myOrder(bobKeys, memeMint.publicKey, 1);
+    expect(order).to.deep.include({ is_buy: true, price: 3000n, lots: 400n, remaining: 0n });
+  });
+
+  it("the seller collects the fill with settle", async () => {
+    const before = await balances(alice, aliceKeys);
+    await settleOrder(alice, memeMint.publicKey, 0, false);
+    const after = await balances(alice, aliceKeys);
+    expect(after.usdc).to.equal(before.usdc + 400n * 2500n);
+    expect(after.meme).to.equal(before.meme);
+    const order = await myOrder(aliceKeys, memeMint.publicKey, 0);
+    expect(order).to.deep.include({ is_buy: false, price: 2500n, remaining: 600n });
+  });
+
+  it("the cheapest sell fills first (price priority)", async () => {
+    await placeOrder(alice, aliceKeys, memeMint.publicKey, false, 2000n, 500n); // slot 2: sell 500 @ 0.002
+    const before = await balances(bob, bobKeys);
+
+    await placeOrder(bob, bobKeys, memeMint.publicKey, true, 2600n, 300n); // buy 300 @ 0.0026
+
+    const after = await balances(bob, bobKeys);
+    expect(after.meme).to.equal(before.meme + 300n * LOT);
+    expect(after.usdc).to.equal(before.usdc - 300n * 2000n); // filled at 0.002, not 0.0025
+    await settleOrder(alice, memeMint.publicKey, 2, false);
+    expect(await myOrder(aliceKeys, memeMint.publicKey, 2)).to.deep.include({ remaining: 200n });
+    await settleOrder(alice, memeMint.publicKey, 0, false);
+    expect(await myOrder(aliceKeys, memeMint.publicKey, 0)).to.deep.include({ remaining: 600n });
+  });
+
+  it("an order the trader can't afford is rejected and changes nothing", async () => {
+    const before = await balances(bob, bobKeys);
+    const seqsBefore = (await bookState()).seqs.map(String);
+    await placeOrder(bob, bobKeys, memeMint.publicKey, true, 1_000_000n, 1_000_000n); // 1M USDC
+    expect((await bookState()).seqs.map(String)).to.deep.equal(seqsBefore);
+    expect(await balances(bob, bobKeys)).to.deep.equal(before);
+  });
+
+  it("only the owner can collect or cancel an order", async () => {
+    try {
+      await settleOrder(bob, memeMint.publicKey, 0, true);
+      expect.fail("bob cancelled alice's order");
+    } catch (e: any) {
+      expect(String(e)).to.match(/NotOrderOwner/);
+    }
+  });
+
+  it("cancelling returns what is still locked and frees the slot", async () => {
+    const before = await balances(alice, aliceKeys);
+    await settleOrder(alice, memeMint.publicKey, 0, true); // 600 left of the first sell
+    const after = await balances(alice, aliceKeys);
+    expect(after.meme).to.equal(before.meme + 600n * LOT);
+    const book = await bookState();
+    expect(book.seqs[0].toString()).to.equal("0");
+    expect(book.owners[0].toBase58()).to.equal(PublicKey.default.toBase58());
   });
 });
 

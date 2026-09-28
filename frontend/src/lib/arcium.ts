@@ -54,15 +54,23 @@ export function encryptValues(
   return { ct: cipher.encrypt(values, nonce), nonce: new BN(nonce, "le") };
 }
 
-/** Decrypts one value Arcium encrypted to us (a balance, a salt):
- *  x25519 shared secret → Rescue key → decrypt. */
+/** Decrypts values Arcium encrypted to us: x25519 shared secret → Rescue key → decrypt. */
+export function decryptValues(
+  privateKey: Uint8Array,
+  mxePublicKey: Uint8Array,
+  ciphertexts: number[][],
+  nonce: BN,
+): bigint[] {
+  const cipher = new RescueCipher(x25519.getSharedSecret(privateKey, mxePublicKey));
+  return cipher.decrypt(ciphertexts, new Uint8Array(nonce.toArrayLike(Buffer, "le", 16)));
+}
+
+/** Decrypts one value (a balance, a salt). */
 export function decryptBalance(
   privateKey: Uint8Array,
   mxePublicKey: Uint8Array,
   ciphertext: number[],
   nonce: BN,
 ): bigint {
-  const cipher = new RescueCipher(x25519.getSharedSecret(privateKey, mxePublicKey));
-  const nonceBytes = new Uint8Array(nonce.toArrayLike(Buffer, "le", 16));
-  return cipher.decrypt([ciphertext], nonceBytes)[0];
+  return decryptValues(privateKey, mxePublicKey, [ciphertext], nonce)[0];
 }

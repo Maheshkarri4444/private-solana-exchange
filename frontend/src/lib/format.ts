@@ -30,8 +30,10 @@ const SUBSCRIPT = "₀₁₂₃₄₅₆₇₈₉";
 export function formatPrice(price: number): string {
   if (!Number.isFinite(price) || price <= 0) return "0";
   if (price >= 1) return price.toLocaleString("en-US", { maximumFractionDigits: 4 });
-  const zeros = Math.floor(-Math.log10(price)); // leading zeros after "0."
-  const digits = Math.round(price * 10 ** (zeros + 4)).toString().slice(0, 4).replace(/0+$/, "");
+  // 4 significant digits, rounded: 0.0012345 → "1.235e-3"
+  const [mantissa, exponent] = price.toExponential(3).split("e");
+  const zeros = -Number(exponent) - 1; // leading zeros after "0."
+  const digits = mantissa.replace(".", "").replace(/0+$/, "");
   if (zeros < 4) return `0.${"0".repeat(zeros)}${digits}`;
   const sub = String(zeros).split("").map((d) => SUBSCRIPT[Number(d)]).join("");
   return `0.0${sub}${digits}`;

@@ -57,6 +57,32 @@ export interface PoolDoc {
   slot: number;
 }
 
+/**
+ * A private order book. Public: which slots hold an order and whose. The orders
+ * themselves are one ciphertext only Arcium can read.
+ */
+export interface BookDoc {
+  address: string;
+  tokenMint: string;
+  creator: string;
+  initialized: boolean;
+  /** One entry per slot; owner is null when the slot is free. */
+  slots: { owner: string | null; seq: number }[];
+  ordersPlaced: number;
+  createdAt: number;
+  lastActivityAt: number;
+  busy: boolean;
+  slot: number;
+}
+
+/** Each owner's encrypted copy of their order (decrypted only in their browser). */
+export interface BookViewsDoc {
+  address: string;
+  book: string;
+  views: { ciphertexts: string[]; nonce: string }[]; // base64
+  slot: number;
+}
+
 /** Every public price a pool has had (the on-chain ring buffer keeps only 32). */
 export interface PricePointDoc {
   pool: string;
@@ -77,6 +103,10 @@ export async function connectDb(): Promise<void> {
   await pools().createIndex({ address: 1 }, { unique: true });
   await pools().createIndex({ tokenMint: 1 }, { unique: true });
   await prices().createIndex({ pool: 1, time: 1, price: 1 }, { unique: true });
+  await books().createIndex({ address: 1 }, { unique: true });
+  await books().createIndex({ tokenMint: 1 }, { unique: true });
+  await bookViews().createIndex({ address: 1 }, { unique: true });
+  await bookViews().createIndex({ book: 1 }, { unique: true });
 }
 
 function collection<T extends object>(name: string): Collection<T> {
@@ -88,3 +118,5 @@ export const tokens = () => collection<TokenDoc>("tokens");
 export const etas = () => collection<EtaDoc>("etas");
 export const pools = () => collection<PoolDoc>("pools");
 export const prices = () => collection<PricePointDoc>("pool_prices");
+export const books = () => collection<BookDoc>("books");
+export const bookViews = () => collection<BookViewsDoc>("book_views");

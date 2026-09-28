@@ -24,6 +24,7 @@ export function MoveToWallet({ balance, onClose }: { balance: PrivateBalance; on
   const { program, provider, keys, mxePublicKey, send } = usePrivateAccount();
   const [amount, setAmount] = useState("");
   const [step, setStep] = useState<UnshieldStep | null>(null);
+  const [download, setDownload] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
 
@@ -50,7 +51,17 @@ export function MoveToWallet({ balance, onClose }: { balance: PrivateBalance; on
   const move = () =>
     run(async () => {
       if (!program || !provider || !keys || !mxePublicKey || !parsed) return null;
-      const r = await unshield(program, send, provider.wallet.publicKey, keys, mxePublicKey, mint, parsed, setStep);
+      const r = await unshield(
+        program,
+        send,
+        provider.wallet.publicKey,
+        keys,
+        mxePublicKey,
+        mint,
+        parsed,
+        setStep,
+        setDownload,
+      );
       setAmount("");
       return r.debited
         ? { tone: "success", text: `${formatAmount(parsed)} ${symbol} are now in your wallet.`, signature: r.signature }
@@ -144,9 +155,9 @@ export function MoveToWallet({ balance, onClose }: { balance: PrivateBalance; on
               </li>
             );
           })}
-          {step === "prove" && (
+          {step === "prove" && download !== null && download < 1 && (
             <li className="pl-6 text-xs text-muted">
-              The first proof downloads the proving key (~90 MB, cached afterwards).
+              Downloading the proving key (82 MB, once per visit)… {Math.floor(download * 100)}%
             </li>
           )}
         </ol>

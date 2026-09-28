@@ -183,4 +183,61 @@ pub mod private_solana_exchange {
     pub fn cancel_unshield(ctx: Context<CancelUnshield>) -> Result<()> {
         unshield::cancel_unshield_handler(ctx)
     }
+
+    /// One-time setup: register the `place_order` MPC circuit.
+    pub fn init_place_order_comp_def(
+        ctx: Context<InitPlaceOrderCompDef>,
+        circuit_url: Option<String>,
+    ) -> Result<()> {
+        init_comp_def::init_place_order_comp_def_handler(ctx, circuit_url)
+    }
+
+    /// One-time setup: register the `settle_order` MPC circuit.
+    pub fn init_settle_order_comp_def(
+        ctx: Context<InitSettleOrderCompDef>,
+        circuit_url: Option<String>,
+    ) -> Result<()> {
+        init_comp_def::init_settle_order_comp_def_handler(ctx, circuit_url)
+    }
+
+    /// Open a private TOKEN/USDC order book. Token creator only.
+    pub fn create_order_book(ctx: Context<CreateOrderBook>) -> Result<()> {
+        orders::create_order_book_handler(ctx)
+    }
+
+    /// Place a limit order; side, price and size are encrypted in the browser.
+    pub fn place_order(
+        ctx: Context<PlaceOrder>,
+        computation_offset: u64,
+        order_ct: [[u8; 32]; 3],
+        order_nonce: u128,
+    ) -> Result<()> {
+        orders::place_order_handler(ctx, computation_offset, order_ct, order_nonce)
+    }
+
+    #[arcium_callback(encrypted_ix = "place_order")]
+    pub fn place_order_callback(
+        ctx: Context<PlaceOrderCallback>,
+        output: SignedComputationOutputs<PlaceOrderOutput>,
+    ) -> Result<()> {
+        orders::place_order_callback_handler(ctx, output)
+    }
+
+    /// Collect an order's fills into your balances; `cancel` also refunds the rest.
+    pub fn settle_order(
+        ctx: Context<SettleOrder>,
+        computation_offset: u64,
+        slot: u8,
+        cancel: bool,
+    ) -> Result<()> {
+        orders::settle_order_handler(ctx, computation_offset, slot, cancel)
+    }
+
+    #[arcium_callback(encrypted_ix = "settle_order")]
+    pub fn settle_order_callback(
+        ctx: Context<SettleOrderCallback>,
+        output: SignedComputationOutputs<SettleOrderOutput>,
+    ) -> Result<()> {
+        orders::settle_order_callback_handler(ctx, output)
+    }
 }

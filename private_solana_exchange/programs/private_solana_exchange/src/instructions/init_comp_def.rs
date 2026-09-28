@@ -212,3 +212,85 @@ pub fn init_debit_balance_comp_def_handler(
     init_computation_def(ctx.accounts, source)?;
     Ok(())
 }
+
+/// Registers the `place_order` circuit. Same rules as `credit_balance`.
+#[init_computation_definition_accounts("place_order", payer)]
+#[derive(Accounts)]
+pub struct InitPlaceOrderCompDef<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        seeds = [CONFIG_SEED],
+        bump = config.bump,
+        constraint = config.admin == payer.key() @ ErrorCode::NotAdmin,
+    )]
+    pub config: Box<Account<'info, Config>>,
+    #[account(mut, address = derive_mxe_pda!())]
+    pub mxe_account: Box<Account<'info, MXEAccount>>,
+    #[account(mut)]
+    /// CHECK: comp_def_account, checked by the arcium program (not initialized yet).
+    pub comp_def_account: UncheckedAccount<'info>,
+    #[account(mut, address = derive_mxe_lut_pda!(mxe_account.lut_offset_slot))]
+    /// CHECK: address_lookup_table, checked by the arcium program.
+    pub address_lookup_table: UncheckedAccount<'info>,
+    #[account(address = LUT_PROGRAM_ID)]
+    /// CHECK: the Address Lookup Table program.
+    pub lut_program: UncheckedAccount<'info>,
+    pub arcium_program: Program<'info, Arcium>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn init_place_order_comp_def_handler(
+    ctx: Context<InitPlaceOrderCompDef>,
+    circuit_url: Option<String>,
+) -> Result<()> {
+    let source = circuit_url.map(|source| {
+        CircuitSource::OffChain(OffChainCircuitSource {
+            source,
+            hash: circuit_hash!("place_order"),
+        })
+    });
+    init_computation_def(ctx.accounts, source)?;
+    Ok(())
+}
+
+/// Registers the `settle_order` circuit. Same rules as `credit_balance`.
+#[init_computation_definition_accounts("settle_order", payer)]
+#[derive(Accounts)]
+pub struct InitSettleOrderCompDef<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        seeds = [CONFIG_SEED],
+        bump = config.bump,
+        constraint = config.admin == payer.key() @ ErrorCode::NotAdmin,
+    )]
+    pub config: Box<Account<'info, Config>>,
+    #[account(mut, address = derive_mxe_pda!())]
+    pub mxe_account: Box<Account<'info, MXEAccount>>,
+    #[account(mut)]
+    /// CHECK: comp_def_account, checked by the arcium program (not initialized yet).
+    pub comp_def_account: UncheckedAccount<'info>,
+    #[account(mut, address = derive_mxe_lut_pda!(mxe_account.lut_offset_slot))]
+    /// CHECK: address_lookup_table, checked by the arcium program.
+    pub address_lookup_table: UncheckedAccount<'info>,
+    #[account(address = LUT_PROGRAM_ID)]
+    /// CHECK: the Address Lookup Table program.
+    pub lut_program: UncheckedAccount<'info>,
+    pub arcium_program: Program<'info, Arcium>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn init_settle_order_comp_def_handler(
+    ctx: Context<InitSettleOrderCompDef>,
+    circuit_url: Option<String>,
+) -> Result<()> {
+    let source = circuit_url.map(|source| {
+        CircuitSource::OffChain(OffChainCircuitSource {
+            source,
+            hash: circuit_hash!("settle_order"),
+        })
+    });
+    init_computation_def(ctx.accounts, source)?;
+    Ok(())
+}

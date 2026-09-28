@@ -9,17 +9,30 @@
  * changes state, so the database can only reflect what really happened.
  * Balances stay ciphertexts — this server cannot read them.
  */
-import { BorshAccountsCoder, type Idl } from "@anchor-lang/core";
+import { BorshAccountsCoder, BorshCoder, EventParser, type Idl } from "@anchor-lang/core";
 import { getTokenMetadata } from "@solana/spl-token";
 import { type AccountInfo, PublicKey } from "@solana/web3.js";
 import idl from "./idl/private_solana_exchange.json" with { type: "json" };
-import { type EtaDoc, type PoolDoc, etas, pools, prices, tokens } from "./db.js";
+import {
+  type BookDoc,
+  type BookViewsDoc,
+  type EtaDoc,
+  type PoolDoc,
+  bookViews,
+  books,
+  etas,
+  pools,
+  prices,
+  tokens,
+} from "./db.js";
 import { connection, programId } from "./solana.js";
 
 const coder = new BorshAccountsCoder(idl as Idl);
 const discriminators = new Map(
   (idl as Idl).accounts!.map((a) => [Buffer.from(a.discriminator).toString("hex"), a.name]),
 );
+
+const events = new EventParser(programId, new BorshCoder(idl as Idl));
 
 const FULL_SYNC_MS = 60_000;
 const DEFAULT_KEY = PublicKey.default.toBase58();
@@ -88,14 +101,106 @@ async function indexPool(address: string, a: Decoded, slot: number) {
   const points = (a.price_history as Decoded[])
     .slice(0, a.history_len)
     .map((p) => ({ pool: address, time: Number(str(p.timestamp)), price: str(p.price) }));
-  if (points.length > 0) {
-    await prices()
-      .bulkWrite(
-        points.map((p) => ({ updateOne: { filter: p, update: { $setOnInsert: p }, upsert: true } })),
-        { ordered: false },
-      )
-      .catch(() => {}); // duplicates are expected
+  await savePrices(points);
+
+  // Every successful seed or trade pushed one price. Missing some means the
+  // index was offline for more than the 32 the account keeps: rebuild them.
+  const expected = doc.status === 1 ? doc.swapCount + 1 : 0;
+  if ((await prices().countDocuments({ pool: address })) < expected) {
+    backfillPrices(address, doc.swapCount).catch((e) =>
+      console.error("indexer: price backfill failed —", e?.message),
+    );
   }
+}
+
+async function savePrices(points: { pool: string; time: number; price: string }[]) {
+  if (points.length === 0) return;
+  await prices()
+    .bulkWrite(
+      points.map((p) => ({ updateOne: { filter: p, update: { $setOnInsert: p }, upsert: true } })),
+      { ordered: false },
+    )
+    .catch(() => {}); // duplicates are expected
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * A pool's full price history, read from its PoolUpdated events. One RPC call per
+ * transaction, spaced out because public RPCs rate-limit getTransaction.
+ */
+export async function pricesFromEvents(pool: string) {
+  const points: { pool: string; time: number; price: string }[] = [];
+  let before: string | undefined;
+  for (;;) {
+    const sigs = await connection.getSignaturesForAddress(new PublicKey(pool), { before, limit: 1000 });
+    for (const sig of sigs) {
+      if (sig.err) continue;
+      await sleep(500);
+      const tx = await connection.getTransaction(sig.signature, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+      if (!tx?.blockTime || !tx.meta?.logMessages) continue;
+      for (const event of events.parseLogs(tx.meta.logMessages)) {
+        const e = event.data as Decoded;
+        if (event.name === "PoolUpdated" && e.ok && e.pool.toBase58() === pool) {
+          points.push({ pool, time: tx.blockTime, price: str(e.price) });
+        }
+      }
+    }
+    if (sigs.length < 1000) return points;
+    before = sigs[sigs.length - 1].signature;
+  }
+}
+
+const backfilled = new Map<string, number>(); // pool → trade count at its last backfill
+
+async function backfillPrices(pool: string, swapCount: number) {
+  if (backfilled.get(pool) === swapCount) return; // already tried at this state
+  backfilled.set(pool, swapCount);
+  let added = 0;
+  for (const p of await pricesFromEvents(pool)) {
+    // A block's reported time can differ by a second from the clock the program
+    // saw, so a stored point with the same price a moment apart is the same trade.
+    const near = { pool, price: p.price, time: { $gte: p.time - 5, $lte: p.time + 5 } };
+    if (await prices().findOne(near)) continue;
+    await savePrices([p]);
+    added++;
+  }
+  console.log(`indexer: rebuilt ${added} missing prices for pool ${pool} from events`);
+}
+
+async function indexBook(address: string, a: Decoded, slot: number) {
+  const doc: BookDoc = {
+    address,
+    tokenMint: a.token_mint.toBase58(),
+    creator: a.creator.toBase58(),
+    initialized: a.initialized,
+    slots: (a.seqs as { toString(): string }[]).map((seq, i) => ({
+      owner: Number(str(seq)) === 0 ? null : a.owners[i].toBase58(),
+      seq: Number(str(seq)),
+    })),
+    ordersPlaced: Number(str(a.orders_placed)),
+    createdAt: Number(str(a.created_at)),
+    lastActivityAt: Number(str(a.last_activity_at)),
+    busy: a.pending_computation.toBase58() !== DEFAULT_KEY,
+    slot,
+  };
+  await upsertNewer(books(), doc);
+}
+
+async function indexBookViews(address: string, a: Decoded, slot: number) {
+  const doc: BookViewsDoc = {
+    address,
+    book: a.book.toBase58(),
+    views: (a.views as number[][][]).map((cts, i) => ({
+      ciphertexts: cts.map(b64),
+      nonce: str(a.nonces[i]),
+    })),
+    slot,
+  };
+  await upsertNewer(bookViews(), doc);
 }
 
 /** Reads `image` / `description` from a token's metadata JSON, if reachable. */
@@ -171,6 +276,8 @@ async function indexAccount(
   if (type === "EncryptedTokenAccount") await indexEta(address, decoded, slot);
   else if (type === "Pool") await indexPool(address, decoded, slot);
   else if (type === "TokenInfo") await indexTokenInfo(decoded, slot, splSupply);
+  else if (type === "OrderBook") await indexBook(address, decoded, slot);
+  else if (type === "OrderViews") await indexBookViews(address, decoded, slot);
 }
 
 /** Every mint's SPL supply in as few RPC calls as possible (100 accounts per call). */

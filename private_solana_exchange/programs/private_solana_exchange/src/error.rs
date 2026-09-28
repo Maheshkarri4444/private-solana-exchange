@@ -46,4 +46,12 @@ pub enum ErrorCode {
     WrongUnshieldStep,
     #[msg("The zero-knowledge proof is not valid")]
     InvalidProof,
+    #[msg("USDC is the quote currency; it cannot have its own order book")]
+    InvalidMarket,
+    #[msg("The order book is full; try again when an order is cancelled")]
+    BookFull,
+    #[msg("You already have the maximum number of open orders in this book")]
+    TooManyOrders,
+    #[msg("This order belongs to someone else")]
+    NotOrderOwner,
 }

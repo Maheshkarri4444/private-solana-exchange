@@ -1,7 +1,8 @@
 // After `npm run build`: writes the verifying key into the Solana program,
 // copies the prover files to the frontend, and makes a test proof (fixture)
 // for the program's unit test.
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import * as snarkjs from "snarkjs";
 import { commitment } from "./commitment.mjs";
 
@@ -32,13 +33,24 @@ ${vk.IC.map((p) => "    " + rustBytes(g1(p)) + ",").join("\n")}
 writeFileSync(PROGRAM_VK, rust);
 console.log("wrote", PROGRAM_VK);
 
-// The browser prover: snarkjs bundle + circuit wasm + proving key (the key is
-// git-ignored there; deploys load it from IPFS via NEXT_PUBLIC_UNSHIELD_ZKEY_URL).
+// The browser prover: snarkjs bundle + circuit wasm + proving key. The key is
+// 82 MB, so it is split into parts under GitHub's 50 MB warning size; the
+// browser downloads them, joins them and checks the SHA-256 in the manifest.
+const PART_BYTES = 45 * 1024 * 1024;
 mkdirSync(FRONTEND_ZK, { recursive: true });
 copyFileSync("node_modules/snarkjs/build/snarkjs.min.js", `${FRONTEND_ZK}/snarkjs.min.js`);
 copyFileSync("build/unshield_js/unshield.wasm", `${FRONTEND_ZK}/unshield.wasm`);
-copyFileSync("build/unshield.zkey", `${FRONTEND_ZK}/unshield.zkey`);
-console.log("copied the prover files to", FRONTEND_ZK);
+rmSync(`${FRONTEND_ZK}/unshield.zkey`, { force: true });
+const zkey = readFileSync("build/unshield.zkey");
+const parts = [];
+for (let start = 0; start < zkey.length; start += PART_BYTES) {
+  const name = `unshield.zkey.part${parts.length}`;
+  writeFileSync(`${FRONTEND_ZK}/${name}`, zkey.subarray(start, start + PART_BYTES));
+  parts.push(name);
+}
+const manifest = { parts, bytes: zkey.length, sha256: createHash("sha256").update(zkey).digest("hex") };
+writeFileSync(`${FRONTEND_ZK}/unshield.json`, JSON.stringify(manifest, null, 2) + "\n");
+console.log("copied the prover files to", FRONTEND_ZK, `(zkey in ${parts.length} parts)`);
 
 // Fixture: 250 tokens committed, 100 withdrawn.
 const balance = 250_000_000n;

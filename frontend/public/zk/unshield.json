@@ -1,0 +1,8 @@
+{
+  "parts": [
+    "unshield.zkey.part0",
+    "unshield.zkey.part1"
+  ],
+  "bytes": 82058382,
+  "sha256": "24099d3802e6d90e260e0db973d803e449d608b0ea8d265ab265b2cae2269019"
+}

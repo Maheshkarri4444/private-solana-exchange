@@ -24,9 +24,9 @@ Built on **Arcium** (computation on encrypted data) with **Umbra-style encrypted
  │  • users + token accounts   │        │    (Pinata)            │
  │  • faucet, create token     │        │  • account index       │
  │  • AMM pools, order book    │        │    (MongoDB)           │
- │  • ZK withdraw verifier     │        │  • order-matching      │
- └────────┬────────────▲───────┘        │    crank               │
-   queue  │            │ callback       └────────────────────────┘
+ │  • ZK withdraw verifier     │        │    ciphertexts only    │
+ └────────┬────────────▲───────┘        └────────────────────────┘
+   queue  │            │ callback
    job    ▼            │ (signed result)
  ┌─────────────────────────────┐
  │  ARCIUM MPC NETWORK         │
@@ -44,17 +44,17 @@ Every private action is the same loop:
 
 ## 2. What is public, what is private
 
-| Public (anyone can see)               | Private (encrypted)                   |
-| ------------------------------------- | ------------------------------------- |
-| Token list, names, images             | Every user's balance                  |
-| Total supply of each token            | Swap amounts                          |
-| Faucet / mint amounts                 | Pool reserves                         |
-| Pool price, health score, fee         | Each LP's share                       |
-| Total LP supply, number of trades     | Order side, price and size            |
-| Whether a trade was a buy or a sell   |                                       |
-| That an order exists, who placed it   |                                       |
-| Who sent a transaction, and when      |                                       |
-| Amount moved out to a public wallet   |                                       |
+| Public (anyone can see)                | Private (encrypted)                          |
+| -------------------------------------- | -------------------------------------------- |
+| Token list, names, images              | Every user's balance                         |
+| Total supply of each token             | Swap amounts                                 |
+| Faucet / mint amounts                  | Pool reserves                                |
+| Pool price, health score, fee          | Each LP's share                              |
+| Total LP supply, number of trades      | Order side, price and size                   |
+| Whether a pool trade was a buy or sell | Order book fills (even whether one happened) |
+| That an order exists, who placed it    |                                              |
+| Who sent a transaction, and when       |                                              |
+| Amount moved out to a public wallet    |                                              |
 
 > Privacy needs a crowd. With 3 test users, timing alone can give things away.
 > Fine for a devnet demo — just worth knowing.
@@ -265,26 +265,43 @@ fees behind. You withdraw 10% of `1,000 TOK + 1,060 USDC` → `100 TOK + 106 USD
 
 ## 9. Private order book
 
-Inspired by [private-orderflow-dex](https://github.com/0xsupremedev/private-orderflow-dex), adapted to ETAs.
-
-**Kept from that repo:** orders encrypted in the browser, matching inside MPC,
-a crank that triggers matching, order states, replay-safe settlement.
-
-**Changed:** that repo locks funds in a *public* SPL escrow, which leaks order size.
-Here funds are locked *inside your encrypted balance*, and settlement only moves
-encrypted balances.
+Limit orders whose **side, price and size** stay encrypted. Inspired by
+[private-orderflow-dex](https://github.com/0xsupremedev/private-orderflow-dex)
+(encrypted orders, matching inside MPC), changed in two ways: funds are locked
+**inside your encrypted balance** (not a public escrow that leaks the size), and
+matching happens **as the order is placed**, so no crank is needed.
 
 ```
-Place   encrypt {side, price, size} → MPC moves the needed funds from your ETA
-        into the order (amount hidden)
-Match   crank asks MPC "do buy #12 and sell #7 cross?" → fill at the resting
-        order's price, update both orders
-Claim   MPC moves your fills into your ETAs; cancel returns what is unfilled
+ OrderBook  PDA("book", token)          ← one per token, opened by its creator
+ ├── book     8 slots, one ciphertext only Arcium can read
+ │            each slot: side · price · size · left · fills to collect
+ └── owners   public: who holds each slot, and in what order they came
+
+ OrderViews PDA("book_views", book)     ← your own copy of your order,
+                                          encrypted to you (side · price · size · left)
 ```
 
-- A buy locks `price × size` USDC. A sell locks `size` tokens.
-- Nobody sees side, price or size — not even the crank. Observers only see that
-  orders exist and when they change.
+```
+Place    encrypt {side, price, size} → Arcium locks price×size USDC (buy)
+         or size tokens (sell) from your ETA, adds the order, then matches it:
+         best price first, then oldest; trades happen at the resting order's price
+Collect  your fills (made by others) move into your ETAs
+Cancel   the unfilled part goes back too, and the slot is freed
+```
+
+**Example.** Alice rests *sell 1,000 @ 0.01*. Bob sends *buy 400 @ 0.012*.
+Arcium fills 400 at **0.01** (Alice's price): Bob gets 400 tokens and 0.80 USDC of
+his 4.80 lock back, at once. Alice sees it when she presses *Collect*.
+
+- **Both balances are rewritten on every action** (USDC and the token), so the
+  chain can't tell a buy from a sell. The whole book is rewritten too, so nobody
+  can tell whether a trade happened.
+- **Only the placer is paid at once.** Resting orders collect later, because
+  their owners' balances aren't in that computation.
+- **Why 8 slots?** The book's result must fit in one Solana transaction (Arcium's
+  callback): 8 packed slots is the most that fits. 3 orders per wallet, so no
+  one can fill a book alone.
+- Orders trade in whole tokens; prices are USDC with 6 decimals.
 
 ---
 
@@ -343,6 +360,6 @@ proof of "≥ 100", never 250. Your wallet gets 100 real tokens; your ETA now ho
 1. ✅ **Keys, ETAs, fake USDC, create token** (live on devnet)
 2. ✅ **AMM + user panel** — create pool, buy / sell, price chart, health, 30 USDC faucet (live on devnet)
 3. ✅ **Move to wallet with a ZK proof** + backend account index (no chain scans)
-4. Order book
+4. ✅ **Private order book** (live on devnet)
 5. Add / remove liquidity for other LPs
 6. Deposit back (public → private)

@@ -10,9 +10,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { fetchMxePublicKey } from "@/lib/arcium";
+import { explainError } from "@/lib/errors";
 import { type PrivateKeys, SIGN_MESSAGE, clearKeys, deriveKeys, loadKeys, saveKeys } from "@/lib/keys";
 import { type ExchangeProgram, getProgram, pdas } from "@/lib/program";
 
@@ -40,6 +42,10 @@ interface PrivateAccount {
   registered: boolean | null;
   /** On-chain key differs from the derived one (should never happen). */
   keyMismatch: boolean;
+  /** The wallet is showing the "sign to unlock" request. */
+  unlocking: boolean;
+  /** Why the last unlock failed (e.g. the user rejected it). */
+  unlockError: string | null;
   unlock: () => Promise<void>;
   register: () => Promise<void>;
   lock: () => void;
@@ -120,13 +126,38 @@ export function PrivateAccountProvider({ children }: { children: ReactNode }) {
     if (!mxePublicKey) fetchMxePublicKey(readProvider).then(setMxePublicKey).catch(console.error);
   }, [readProvider, mxePublicKey]);
 
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+
   const unlock = useCallback(async () => {
     if (!wallet || !signMessage) throw new Error("This wallet cannot sign messages");
-    const signature = await signMessage(new TextEncoder().encode(SIGN_MESSAGE));
-    const derived = deriveKeys(signature);
-    saveKeys(wallet, derived);
-    setKeys(derived);
+    setUnlocking(true);
+    setUnlockError(null);
+    try {
+      const signature = await signMessage(new TextEncoder().encode(SIGN_MESSAGE));
+      const derived = deriveKeys(signature);
+      saveKeys(wallet, derived);
+      setKeys(derived);
+    } catch (e) {
+      setUnlockError(explainError(e));
+      throw e;
+    } finally {
+      setUnlocking(false);
+    }
   }, [wallet, signMessage]);
+
+  // Connecting includes signing: ask right after the wallet connects, once per
+  // connection. Skipped when this tab already holds the keys.
+  const askedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!wallet) {
+      askedFor.current = null;
+      return;
+    }
+    if (!signMessage || askedFor.current === wallet || loadKeys(wallet)) return;
+    askedFor.current = wallet;
+    unlock().catch(() => {}); // unlockError is shown with a retry button
+  }, [wallet, signMessage, unlock]);
 
   const register = useCallback(async () => {
     if (!program || !publicKey || !keys) throw new Error("Unlock first");
@@ -157,6 +188,8 @@ export function PrivateAccountProvider({ children }: { children: ReactNode }) {
     mxePublicKey,
     registered: registeredKey === undefined ? null : registeredKey !== null,
     keyMismatch,
+    unlocking,
+    unlockError,
     unlock,
     register,
     lock,

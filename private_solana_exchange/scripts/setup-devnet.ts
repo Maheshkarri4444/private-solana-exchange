@@ -4,7 +4,6 @@
  *   2. init_config (config + USDC mint)
  *   3. pin each MPC circuit to IPFS and register it with Arcium
  *   4. index USDC in the backend token registry
- *   5. pin the ZK proving key (zk/build/unshield.zkey) for deployed frontends
  *
  * Run from private_solana_exchange/ (backend must be running for step 4):
  *   ANCHOR_PROVIDER_URL=https://api.devnet.solana.com ANCHOR_WALLET=~/.config/solana/id.json \
@@ -98,6 +97,8 @@ async function main() {
     swap: (url: string) => program.methods.initSwapCompDef(url),
     commit_balance: (url: string) => program.methods.initCommitBalanceCompDef(url),
     debit_balance: (url: string) => program.methods.initDebitBalanceCompDef(url),
+    place_order: (url: string) => program.methods.initPlaceOrderCompDef(url),
+    settle_order: (url: string) => program.methods.initSettleOrderCompDef(url),
   };
   const mxeAccount = getMXEAccAddress(program.programId);
   const mxe = await getArciumProgram(provider).account.mxeAccount.fetch(mxeAccount);
@@ -145,21 +146,6 @@ async function main() {
     console.log("backend registry: skipped (backend not running) — re-run later to index USDC");
   }
 
-  // 5. ZK proving key. Local dev serves it from frontend/public/zk; a deployed
-  // frontend loads it from IPFS (NEXT_PUBLIC_UNSHIELD_ZKEY_URL).
-  const zkey = "../zk/build/unshield.zkey";
-  const record = "../zk/zkey-ipfs.json";
-  if (fs.existsSync(zkey)) {
-    const sha256 = hash(fs.readFileSync(zkey));
-    const pinned = fs.existsSync(record) ? JSON.parse(fs.readFileSync(record, "utf8")) : null;
-    if (pinned?.sha256 === sha256) {
-      console.log("zkey: already pinned", pinned.url);
-    } else {
-      const url = await pinFile(zkey, "application/octet-stream");
-      fs.writeFileSync(record, JSON.stringify({ url, sha256 }, null, 2) + "\n");
-      console.log("zkey: pinned", url, "→ set NEXT_PUBLIC_UNSHIELD_ZKEY_URL to it for deploys");
-    }
-  }
 }
 
 main().catch((e) => {

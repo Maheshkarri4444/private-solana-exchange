@@ -211,6 +211,249 @@ mod circuits {
         Shared::new(balance.owner.public_key).from_arcis(rest)
     }
 
+    // ------------------------------------------------------------ order book
+
+    /// Resting orders per book. Bounded by the callback transaction size.
+    const BOOK_SLOTS: usize = 8;
+    /// Orders trade in whole tokens: 1 lot = 1 token = 10^6 base units.
+    const LOT: u64 = 1_000_000;
+
+    /// A new limit order, encrypted by the trader.
+    pub struct OrderInput {
+        pub is_buy: bool,
+        /// USDC base units (micro-USDC) per whole token.
+        pub price: u64,
+        /// Whole tokens.
+        pub lots: u32,
+    }
+
+    /// One resting order. The book is readable only by Arcium.
+    #[derive(Clone, Copy)]
+    pub struct Slot {
+        pub is_buy: bool,
+        pub price: u64,
+        pub lots: u32,
+        pub remaining: u32,
+        /// Fills waiting to be collected: tokens (in lots) for a buy, USDC for a
+        /// sell. A resting order always trades at its own price, so one field is enough.
+        pub claim: u64,
+    }
+
+    pub struct Book {
+        pub slots: [Slot; BOOK_SLOTS],
+    }
+
+    /// The owner's copy of their order (fills already collected).
+    pub struct OrderView {
+        pub is_buy: bool,
+        pub price: u64,
+        pub lots: u32,
+        pub remaining: u32,
+    }
+
+    fn empty_slot() -> Slot {
+        Slot {
+            is_buy: false,
+            price: 0u64,
+            lots: 0u32,
+            remaining: 0u32,
+            claim: 0u64,
+        }
+    }
+
+    fn view_of(s: Slot) -> OrderView {
+        OrderView {
+            is_buy: s.is_buy,
+            price: s.price,
+            lots: s.lots,
+            remaining: s.remaining,
+        }
+    }
+
+    /// Places a limit order: locks its funds from the trader's encrypted balance,
+    /// adds it to the book at `slot` and matches it against the resting orders
+    /// (best price first, then oldest), at each resting order's own price. The
+    /// trader's fills are paid out at once. Both balances are rewritten either
+    /// way, so observers can't tell a buy from a sell. `ages`: 0 = oldest.
+    #[instruction]
+    pub fn place_order(
+        usdc_balance: Enc<Shared, u64>,
+        usdc_initialized: bool,
+        token_balance: Enc<Shared, u64>,
+        token_initialized: bool,
+        order_ctxt: Enc<Shared, OrderInput>,
+        book_ctxt: Enc<Mxe, Pack<Book>>,
+        book_initialized: bool,
+        slot: u8,
+        ages: [u8; BOOK_SLOTS],
+    ) -> (
+        Enc<Shared, u64>,
+        Enc<Shared, u64>,
+        Enc<Mxe, Pack<Book>>,
+        Enc<Shared, Pack<OrderView>>,
+        bool,
+    ) {
+        let usdc = if usdc_initialized { usdc_balance.to_arcis() } else { 0u64 };
+        let token = if token_initialized { token_balance.to_arcis() } else { 0u64 };
+        let order = order_ctxt.to_arcis();
+        let stored = book_ctxt.to_arcis().unpack();
+        let mut slots = [empty_slot(); BOOK_SLOTS];
+        for i in 0..BOOK_SLOTS {
+            slots[i] = if book_initialized { stored.slots[i] } else { empty_slot() };
+        }
+
+        // A buy locks price × size USDC, a sell locks size tokens.
+        let cost_quote = (order.lots as u128) * (order.price as u128);
+        let cost_base = (order.lots as u128) * (LOT as u128);
+        let affordable = if order.is_buy {
+            cost_quote <= usdc as u128
+        } else {
+            cost_base <= token as u128
+        };
+        let ok = (order.lots > 0u32) & (order.price > 0u64) & affordable;
+        let lock_quote = if ok & order.is_buy { cost_quote as u64 } else { 0u64 };
+        let lock_base = if ok & !order.is_buy { cost_base as u64 } else { 0u64 };
+        let usdc = usdc - lock_quote;
+        let token = token - lock_base;
+
+        // The book never rests crossed, so every trade involves this new order.
+        let mut left = if ok { order.lots } else { 0u32 };
+        let mut got_lots = 0u32; // tokens bought (a buy)
+        let mut got_quote = 0u64; // USDC earned (a sell) or refunded (a buy paying less than its limit)
+        for _ in 0..(BOOK_SLOTS - 1) {
+            // Best resting order on the other side that crosses our limit.
+            let mut found = false;
+            let mut best = 0u8;
+            let mut best_price = 0u64;
+            let mut best_age = 0u8;
+            let mut best_left = 0u32;
+            for i in 0..BOOK_SLOTS {
+                let s = slots[i];
+                let crosses = if order.is_buy { s.price <= order.price } else { s.price >= order.price };
+                let eligible =
+                    ((i as u8) != slot) & (s.remaining > 0u32) & (s.is_buy != order.is_buy) & crosses;
+                let better_price = if order.is_buy { s.price < best_price } else { s.price > best_price };
+                let better = eligible
+                    & (!found | better_price | ((s.price == best_price) & (ages[i] < best_age)));
+                best = if better { i as u8 } else { best };
+                best_price = if better { s.price } else { best_price };
+                best_age = if better { ages[i] } else { best_age };
+                best_left = if better { s.remaining } else { best_left };
+                found = found | better;
+            }
+
+            let lots = if found & (left > 0u32) {
+                if left < best_left {
+                    left
+                } else {
+                    best_left
+                }
+            } else {
+                0u32
+            };
+            let quote = ((lots as u128) * (best_price as u128)) as u64;
+            left = left - lots;
+            got_lots = got_lots + if order.is_buy { lots } else { 0u32 };
+            got_quote = got_quote
+                + if order.is_buy {
+                    ((lots as u128) * ((order.price - best_price) as u128)) as u64
+                } else {
+                    quote
+                };
+
+            // The resting order sold (earns USDC) or bought (earns tokens).
+            let paid = if order.is_buy { quote } else { lots as u64 };
+            for i in 0..BOOK_SLOTS {
+                let hit = (best == i as u8) & (lots > 0u32);
+                let s = slots[i];
+                slots[i] = Slot {
+                    is_buy: s.is_buy,
+                    price: s.price,
+                    lots: s.lots,
+                    remaining: s.remaining - if hit { lots } else { 0u32 },
+                    claim: s.claim + if hit { paid } else { 0u64 },
+                };
+            }
+        }
+
+        let placed = Slot {
+            is_buy: order.is_buy,
+            price: if ok { order.price } else { 0u64 },
+            lots: if ok { order.lots } else { 0u32 },
+            remaining: left,
+            claim: 0u64,
+        };
+        for i in 0..BOOK_SLOTS {
+            slots[i] = if (i as u8) == slot { placed } else { slots[i] };
+        }
+
+        let owner = usdc_balance.owner.public_key;
+        (
+            Shared::new(owner).from_arcis(usdc + got_quote),
+            Shared::new(owner).from_arcis(token + (got_lots as u64) * LOT),
+            Mxe::get().from_arcis(Pack::new(Book { slots })),
+            Shared::new(owner).from_arcis(Pack::new(view_of(placed))),
+            ok.reveal(),
+        )
+    }
+
+    /// Collects an order's fills into the owner's balances. With `cancel` it
+    /// also refunds what is still locked and empties the slot. Returns the
+    /// owner's up-to-date copy of the order.
+    #[instruction]
+    pub fn settle_order(
+        usdc_balance: Enc<Shared, u64>,
+        usdc_initialized: bool,
+        token_balance: Enc<Shared, u64>,
+        token_initialized: bool,
+        book_ctxt: Enc<Mxe, Pack<Book>>,
+        slot: u8,
+        cancel: bool,
+    ) -> (
+        Enc<Shared, u64>,
+        Enc<Shared, u64>,
+        Enc<Mxe, Pack<Book>>,
+        Enc<Shared, Pack<OrderView>>,
+    ) {
+        let usdc = if usdc_initialized { usdc_balance.to_arcis() } else { 0u64 };
+        let token = if token_initialized { token_balance.to_arcis() } else { 0u64 };
+        let mut slots = book_ctxt.to_arcis().unpack().slots;
+
+        let mut mine = empty_slot();
+        for i in 0..BOOK_SLOTS {
+            mine = if (i as u8) == slot { slots[i] } else { mine };
+        }
+        // Fills: tokens for a buy, USDC for a sell. Cancel: plus the unfilled lock.
+        let back_quote = if cancel & mine.is_buy {
+            ((mine.remaining as u128) * (mine.price as u128)) as u64
+        } else {
+            0u64
+        };
+        let back_lots = if cancel & !mine.is_buy { mine.remaining as u64 } else { 0u64 };
+        let quote = back_quote + if mine.is_buy { 0u64 } else { mine.claim };
+        let lots = back_lots + if mine.is_buy { mine.claim } else { 0u64 };
+
+        let after = Slot {
+            is_buy: mine.is_buy,
+            price: mine.price,
+            lots: mine.lots,
+            remaining: mine.remaining,
+            claim: 0u64,
+        };
+        let after = if cancel { empty_slot() } else { after };
+        for i in 0..BOOK_SLOTS {
+            slots[i] = if (i as u8) == slot { after } else { slots[i] };
+        }
+
+        let owner = usdc_balance.owner.public_key;
+        (
+            Shared::new(owner).from_arcis(usdc + quote),
+            Shared::new(owner).from_arcis(token + lots * LOT),
+            Mxe::get().from_arcis(Pack::new(Book { slots })),
+            Shared::new(owner).from_arcis(Pack::new(view_of(after))),
+        )
+    }
+
     /// Public price + coarse health, computed from private reserves.
     fn pool_stats(ok: bool, r: &Reserves, total_supply: u64) -> PoolStats {
         // Fixed-point division (cheap in MPC); the price is for display, so ~2^-52
