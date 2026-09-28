@@ -8,6 +8,9 @@ skip-lint = false
 [programs.localnet]
 private_solana_exchange = "7DtBhe3Fi46dy6Gp1Mj7FbW9oZD3xzRs2RKXurtmL3VP"
 
+[programs.devnet]
+private_solana_exchange = "7DtBhe3Fi46dy6Gp1Mj7FbW9oZD3xzRs2RKXurtmL3VP"
+
 [registry]
 url = "https://api.apr.dev"
 
