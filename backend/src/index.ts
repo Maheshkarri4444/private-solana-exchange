@@ -4,6 +4,7 @@ import express from "express";
 import { config } from "./config.js";
 import { connectDb } from "./db.js";
 import { startIndexer } from "./indexer.js";
+import { startSettler } from "./settler.js";
 import { accountsRouter } from "./routes/accounts.js";
 import { booksRouter } from "./routes/books.js";
 import { metadataRouter } from "./routes/metadata.js";
@@ -33,6 +34,7 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 
 await connectDb();
 startIndexer();
+startSettler();
 app.listen(config.port, () => {
   console.log(`backend listening on http://localhost:${config.port}`);
 });

@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@anchor-lang/core": "^1.2.0",
+    "@arcium-hq/client": "^0.15.0",
     "@solana/spl-token": "^0.4.15",
     "@solana/web3.js": "^1.99.0",
+    "bn.js": "^5.2.5",
     "cors": "^2.8.6",
     "dotenv": "^18.0.3",
     "express": "^5.2.1",
@@ -22,6 +24,7 @@
     "multer": "^2.4.0"
   },
   "devDependencies": {
+    "@types/bn.js": "^5.2.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.2.0",

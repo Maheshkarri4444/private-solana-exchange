@@ -3,7 +3,7 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "sync-idl": "mkdir -p ../backend/src/idl ../frontend/src/idl && cp target/idl/private_solana_exchange.json ../backend/src/idl/ && cp target/idl/private_solana_exchange.json target/types/private_solana_exchange.ts ../frontend/src/idl/"
+    "sync-idl": "mkdir -p ../backend/src/idl ../frontend/src/idl && cp target/idl/private_solana_exchange.json target/types/private_solana_exchange.ts ../backend/src/idl/ && cp target/idl/private_solana_exchange.json target/types/private_solana_exchange.ts ../frontend/src/idl/"
   },
   "dependencies": {
     "@anchor-lang/core": "^1.0.2",

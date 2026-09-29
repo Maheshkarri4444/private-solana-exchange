@@ -27,6 +27,12 @@ export const pdas = {
   lpMint: (pool: PublicKey) => pda(Buffer.from("lp_mint"), pool.toBuffer()),
   book: (tokenMint: PublicKey) => pda(Buffer.from("book"), tokenMint.toBuffer()),
   bookViews: (book: PublicKey) => pda(Buffer.from("book_views"), book.toBuffer()),
+  /** Token account holding public tokens moved into the exchange. */
+  vault: (mint: PublicKey) => pda(Buffer.from("vault"), mint.toBuffer()),
+  /** Signs mints and owns every vault. */
+  mintAuthority: () => pda(Buffer.from("mint_authority")),
+  lpPosition: (pool: PublicKey, owner: PublicKey) =>
+    pda(Buffer.from("lp_fees"), pool.toBuffer(), owner.toBuffer()),
 };
 
 /** Byte offset of `owner` in EncryptedTokenAccount: discriminator 8 + balance_ct 32 + nonce 16. */

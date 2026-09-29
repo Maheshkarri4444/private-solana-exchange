@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { BookRecord } from "@/lib/api";
-import { BOOK_SLOTS, openOrders } from "@/lib/books";
+import { BOOK_SLOTS, openOrders, toUsdc } from "@/lib/books";
 import { formatPrice, shortAddress } from "@/lib/format";
 import { PrivateBadge, TokenIcon } from "./ui";
 
@@ -36,14 +36,14 @@ export function BookCard({ book }: { book: BookRecord }) {
 
       <div className="mt-3 flex items-end justify-between text-sm">
         <div>
-          <p className="text-xs text-muted">Open orders</p>
+          <p className="text-xs text-muted">Waiting orders</p>
           <p className="font-mono font-semibold">
             {open} / {BOOK_SLOTS}
           </p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-muted">
-            {book.poolPrice ? `Pool ${formatPrice(Number(book.poolPrice) / 1e12)} USDC` : "Prices hidden"}
+          <p className="font-mono text-sm font-semibold">
+            {book.lastPrice !== "0" ? `${formatPrice(toUsdc(book.lastPrice))} USDC` : "No trades yet"}
           </p>
           <p className="text-xs text-muted">Active {timeAgo(book.lastActivityAt)}</p>
         </div>

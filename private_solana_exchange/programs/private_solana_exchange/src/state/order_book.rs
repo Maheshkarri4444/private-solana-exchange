@@ -34,7 +34,14 @@ pub struct OrderBook {
     pub pending_slot: u8,
     pub bump: u8,
     pub views_bump: u8,
-    pub reserved: [u8; 64],
+    /// Slots that traded and wait for settlement (one bit per slot).
+    pub settle_mask: u8,
+    /// Last trade price (micro-USDC per token) and time: public, like on any exchange.
+    pub last_price: u64,
+    pub last_trade_at: i64,
+    /// Orders that traded on arrival.
+    pub trades: u64,
+    pub reserved: [u8; 39],
 }
 
 /// Each owner's copy of their order, encrypted to them, as of their last
@@ -80,12 +87,9 @@ impl OrderBook {
             .count()
     }
 
-    /// Time priority for the circuit: 0 = oldest order. `new_slot` counts as the newest.
-    pub fn ages(&self, new_slot: Option<u8>) -> [u8; BOOK_SLOTS] {
-        let mut seqs = self.seqs;
-        if let Some(s) = new_slot {
-            seqs[s as usize] = u64::MAX;
-        }
+    /// Time priority for the circuit: 0 = oldest order.
+    pub fn ages(&self) -> [u8; BOOK_SLOTS] {
+        let seqs = self.seqs;
         let mut ages = [0u8; BOOK_SLOTS];
         for i in 0..BOOK_SLOTS {
             ages[i] = (0..BOOK_SLOTS)
@@ -104,5 +108,6 @@ impl OrderBook {
     pub fn free(&mut self, slot: u8) {
         self.owners[slot as usize] = Pubkey::default();
         self.seqs[slot as usize] = 0;
+        self.settle_mask &= !(1 << slot);
     }
 }

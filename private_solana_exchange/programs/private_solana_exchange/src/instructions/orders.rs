@@ -1,13 +1,15 @@
-//! Private order book: limit orders whose side, price and size stay encrypted.
+//! Private order book: orders whose side, price and size stay encrypted.
 //!
 //! - `create_order_book`  the token's creator opens a TOKEN/USDC book.
 //! - `place_order`        Arcium locks the order's funds from your encrypted
-//!                        balance, adds it to the book and matches the book.
-//! - `settle_order`       collects your fills into your balances; with `cancel`
-//!                        it also returns what is still locked and frees the slot.
+//!                        balance and matches it (limit, market or post-only).
+//!                        It publishes which resting orders it traded with.
+//! - `settle_order`       moves a traded order's fills into its owner's
+//!                        balances. Anyone may trigger it (the backend does, right
+//!                        after a trade); only the owner may `cancel`.
 //!
-//! Every action rewrites both of the trader's balances and the whole book, so
-//! observers can't tell a buy from a sell, or whether anything traded.
+//! Every action rewrites the trader's two balances and the whole book, so
+//! observers can't tell a buy from a sell, or see any price or size.
 
 use anchor_lang::prelude::*;
 use arcium_anchor::prelude::*;
@@ -82,7 +84,7 @@ fn views_address(book: &Account<OrderBook>) -> Result<Pubkey> {
 
 // ---------------------------------------------------------------- place
 
-#[queue_computation_accounts("place_order", payer)]
+#[queue_computation_accounts("book_place", payer)]
 #[derive(Accounts)]
 #[instruction(computation_offset: u64)]
 pub struct PlaceOrder<'info> {
@@ -120,7 +122,7 @@ pub struct PlaceOrder<'info> {
     #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account))]
     /// CHECK: computation_account, checked by the arcium program.
     pub computation_account: UncheckedAccount<'info>,
-    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_PLACE_ORDER))]
+    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_BOOK_PLACE))]
     pub comp_def_account: Box<Account<'info, ComputationDefinitionAccount>>,
     #[account(mut, address = derive_cluster_pda!(mxe_account))]
     pub cluster_account: Box<Account<'info, Cluster>>,
@@ -132,19 +134,19 @@ pub struct PlaceOrder<'info> {
     pub arcium_program: Program<'info, Arcium>,
 }
 
-/// The checks every book action shares: the trader's own two accounts for this
+/// The checks every book action shares: `owner`'s own two accounts for this
 /// market, not busy and not frozen by a move to wallet.
-fn check_trader(
+fn check_accounts(
     config: &Config,
     book: &OrderBook,
     usdc_eta: &EncryptedTokenAccount,
     token_eta: &EncryptedTokenAccount,
-    trader: &Pubkey,
+    owner: &Pubkey,
     slot: u64,
 ) -> Result<()> {
     require_keys_eq!(config.usdc_mint, usdc_eta.mint, ErrorCode::WrongAccount);
     require!(
-        usdc_eta.owner == *trader && token_eta.owner == *trader && token_eta.mint == book.token_mint,
+        usdc_eta.owner == *owner && token_eta.owner == *owner && token_eta.mint == book.token_mint,
         ErrorCode::WrongAccount
     );
     require!(!usdc_eta.is_frozen() && !token_eta.is_frozen(), ErrorCode::AccountFrozen);
@@ -160,18 +162,26 @@ pub fn place_order_handler(
     computation_offset: u64,
     order_ct: [[u8; 32]; 3],
     order_nonce: u128,
+    kind: u8,
 ) -> Result<()> {
     let slot = Clock::get()?.slot;
     let computation = ctx.accounts.computation_account.key();
     let a = &mut *ctx.accounts;
     let trader = a.payer.key();
-    check_trader(&a.config, &a.book, &a.usdc_eta, &a.token_eta, &trader, slot)?;
-    require!(
-        a.book.open_orders_of(&trader) < MAX_ORDERS_PER_USER as usize,
-        ErrorCode::TooManyOrders
-    );
-    let book_slot = a.book.free_slot().ok_or(ErrorCode::BookFull)?;
-    let ages = a.book.ages(Some(book_slot));
+    require!(kind <= ORDER_POST_ONLY, ErrorCode::InvalidOrderKind);
+    check_accounts(&a.config, &a.book, &a.usdc_eta, &a.token_eta, &trader, slot)?;
+
+    // A market order never waits in the book, so it needs no free slot.
+    let book_slot = if kind == ORDER_MARKET {
+        a.book.free_slot().unwrap_or(0)
+    } else {
+        require!(
+            a.book.open_orders_of(&trader) < MAX_ORDERS_PER_USER as usize,
+            ErrorCode::TooManyOrders
+        );
+        a.book.free_slot().ok_or(ErrorCode::BookFull)?
+    };
+    let ages = a.book.ages();
 
     a.book.lock(computation, slot, BOOK_KIND_PLACE, book_slot);
     a.usdc_eta.lock(computation, slot);
@@ -199,6 +209,7 @@ pub fn place_order_handler(
     for age in ages {
         args = args.plaintext_u8(age);
     }
+    args = args.plaintext_u8(kind);
 
     let writable = |pubkey| CallbackAccount {
         pubkey,
@@ -216,7 +227,7 @@ pub fn place_order_handler(
         ctx.accounts,
         computation_offset,
         args.build(),
-        vec![PlaceOrderCallback::callback_ix(
+        vec![BookPlaceCallback::callback_ix(
             computation_offset,
             &ctx.accounts.mxe_account,
             &callback_accounts,
@@ -228,11 +239,11 @@ pub fn place_order_handler(
     Ok(())
 }
 
-#[callback_accounts("place_order")]
+#[callback_accounts("book_place")]
 #[derive(Accounts)]
-pub struct PlaceOrderCallback<'info> {
+pub struct BookPlaceCallback<'info> {
     pub arcium_program: Program<'info, Arcium>,
-    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_PLACE_ORDER))]
+    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_BOOK_PLACE))]
     pub comp_def_account: Box<Account<'info, ComputationDefinitionAccount>>,
     #[account(address = derive_mxe_pda!())]
     pub mxe_account: Box<Account<'info, MXEAccount>>,
@@ -253,9 +264,9 @@ pub struct PlaceOrderCallback<'info> {
     pub token_eta: Box<Account<'info, EncryptedTokenAccount>>,
 }
 
-pub fn place_order_callback_handler(
-    ctx: Context<PlaceOrderCallback>,
-    output: SignedComputationOutputs<PlaceOrderOutput>,
+pub fn book_place_callback_handler(
+    ctx: Context<BookPlaceCallback>,
+    output: SignedComputationOutputs<BookPlaceOutput>,
 ) -> Result<()> {
     let computation = ctx.accounts.computation_account.key();
     let a = &mut *ctx.accounts;
@@ -275,20 +286,21 @@ pub fn place_order_callback_handler(
         owner: a.usdc_eta.owner,
     };
     let result = match output.verify_output(&a.cluster_account, &a.computation_account) {
-        Ok(PlaceOrderOutput { field_0 }) => field_0,
+        Ok(BookPlaceOutput { field_0 }) => field_0,
         Err(_) => {
             emit!(rejected);
             return Ok(());
         }
     };
-    let PlaceOrderOutputStruct0 {
+    let BookPlaceOutputStruct0 {
         field_0: usdc_bal,
         field_1: token_bal,
         field_2: book_state,
         field_3: view,
-        field_4: ok,
+        field_4: outcome,
     } = result;
-    // Not enough balance, or a zero price / size: nothing changed.
+    let (ok, rests, traded, price) = (outcome.field_0, outcome.field_1, outcome.field_2, outcome.field_3);
+    // Not enough balance, zero price / size, or a post-only order that would trade: nothing changed.
     if !ok {
         emit!(rejected);
         return Ok(());
@@ -304,28 +316,41 @@ pub fn place_order_callback_handler(
     a.usdc_eta.set_balance(usdc_bal.ciphertexts[0], usdc_bal.nonce);
     a.token_eta.set_balance(token_bal.ciphertexts[0], token_bal.nonce);
 
+    let now = Clock::get()?.unix_timestamp;
     let owner = a.usdc_eta.owner;
     let book = &mut a.book;
     let slot = book.pending_slot;
     book.book_ct = book_state.ciphertexts;
     book.book_nonce = book_state.nonce;
     book.initialized = true;
-    book.occupy(slot, owner);
-    book.last_activity_at = Clock::get()?.unix_timestamp;
-    a.views.views[slot as usize] = view.ciphertexts;
-    a.views.nonces[slot as usize] = view.nonce;
+    if rests {
+        book.occupy(slot, owner);
+        a.views.views[slot as usize] = view.ciphertexts;
+        a.views.nonces[slot as usize] = view.nonce;
+    }
+    // The resting orders it traded with now wait for settlement (the backend runs it).
+    book.settle_mask |= traded;
+    if price > 0 {
+        book.last_price = price;
+        book.last_trade_at = now;
+        book.trades += 1;
+    }
+    book.last_activity_at = now;
 
     emit!(OrderPlaced {
-        book: a.book.key(),
+        book: book.key(),
         owner,
         slot,
+        rests,
+        traded,
+        price,
     });
     Ok(())
 }
 
 // ---------------------------------------------------------------- settle / cancel
 
-#[queue_computation_accounts("settle_order", payer)]
+#[queue_computation_accounts("book_settle", payer)]
 #[derive(Accounts)]
 #[instruction(computation_offset: u64)]
 pub struct SettleOrder<'info> {
@@ -361,7 +386,7 @@ pub struct SettleOrder<'info> {
     #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account))]
     /// CHECK: computation_account, checked by the arcium program.
     pub computation_account: UncheckedAccount<'info>,
-    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_SETTLE_ORDER))]
+    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_BOOK_SETTLE))]
     pub comp_def_account: Box<Account<'info, ComputationDefinitionAccount>>,
     #[account(mut, address = derive_cluster_pda!(mxe_account))]
     pub cluster_account: Box<Account<'info, Cluster>>,
@@ -382,13 +407,17 @@ pub fn settle_order_handler(
     let slot = Clock::get()?.slot;
     let computation = ctx.accounts.computation_account.key();
     let a = &mut *ctx.accounts;
-    let trader = a.payer.key();
-    check_trader(&a.config, &a.book, &a.usdc_eta, &a.token_eta, &trader, slot)?;
     let i = book_slot as usize;
-    require!(
-        i < BOOK_SLOTS && a.book.seqs[i] != 0 && a.book.owners[i] == trader,
-        ErrorCode::NotOrderOwner
-    );
+    require!(i < BOOK_SLOTS && a.book.seqs[i] != 0, ErrorCode::NotOrderOwner);
+    let owner = a.book.owners[i];
+    let caller = a.payer.key();
+    // Only the owner cancels; anyone else may only settle an order that traded.
+    if cancel {
+        require_keys_eq!(caller, owner, ErrorCode::NotOrderOwner);
+    } else if caller != owner {
+        require!(a.book.settle_mask & (1 << book_slot) != 0, ErrorCode::NothingToSettle);
+    }
+    check_accounts(&a.config, &a.book, &a.usdc_eta, &a.token_eta, &owner, slot)?;
 
     let kind = if cancel { BOOK_KIND_CANCEL } else { BOOK_KIND_SETTLE };
     a.book.lock(computation, slot, kind, book_slot);
@@ -427,7 +456,7 @@ pub fn settle_order_handler(
         ctx.accounts,
         computation_offset,
         args,
-        vec![SettleOrderCallback::callback_ix(
+        vec![BookSettleCallback::callback_ix(
             computation_offset,
             &ctx.accounts.mxe_account,
             &callback_accounts,
@@ -439,11 +468,11 @@ pub fn settle_order_handler(
     Ok(())
 }
 
-#[callback_accounts("settle_order")]
+#[callback_accounts("book_settle")]
 #[derive(Accounts)]
-pub struct SettleOrderCallback<'info> {
+pub struct BookSettleCallback<'info> {
     pub arcium_program: Program<'info, Arcium>,
-    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_SETTLE_ORDER))]
+    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_BOOK_SETTLE))]
     pub comp_def_account: Box<Account<'info, ComputationDefinitionAccount>>,
     #[account(address = derive_mxe_pda!())]
     pub mxe_account: Box<Account<'info, MXEAccount>>,
@@ -464,9 +493,9 @@ pub struct SettleOrderCallback<'info> {
     pub token_eta: Box<Account<'info, EncryptedTokenAccount>>,
 }
 
-pub fn settle_order_callback_handler(
-    ctx: Context<SettleOrderCallback>,
-    output: SignedComputationOutputs<SettleOrderOutput>,
+pub fn book_settle_callback_handler(
+    ctx: Context<BookSettleCallback>,
+    output: SignedComputationOutputs<BookSettleOutput>,
 ) -> Result<()> {
     let computation = ctx.accounts.computation_account.key();
     let a = &mut *ctx.accounts;
@@ -480,17 +509,18 @@ pub fn settle_order_callback_handler(
     a.usdc_eta.clear_pending();
     a.token_eta.clear_pending();
 
-    // On failure nothing changed; the owner can simply try again.
-    let Ok(SettleOrderOutput { field_0: result }) =
+    // On failure nothing changed; it can simply be settled again.
+    let Ok(BookSettleOutput { field_0: result }) =
         output.verify_output(&a.cluster_account, &a.computation_account)
     else {
         return Ok(());
     };
-    let SettleOrderOutputStruct0 {
+    let BookSettleOutputStruct0 {
         field_0: usdc_bal,
         field_1: token_bal,
         field_2: book_state,
         field_3: view,
+        field_4: done,
     } = result;
 
     let owner_key = a.usdc_eta.enc_pubkey;
@@ -509,11 +539,12 @@ pub fn settle_order_callback_handler(
     let cancelled = book.pending_kind == BOOK_KIND_CANCEL;
     book.book_ct = book_state.ciphertexts;
     book.book_nonce = book_state.nonce;
-    if cancelled {
+    book.settle_mask &= !(1 << slot);
+    if done {
         book.free(slot);
     }
     book.last_activity_at = Clock::get()?.unix_timestamp;
-    // A cancelled slot's copy becomes all zeros (the circuit empties it).
+    // The owner's copy (the final state stays readable until the slot is reused).
     a.views.views[slot as usize] = view.ciphertexts;
     a.views.nonces[slot as usize] = view.nonce;
 
@@ -522,6 +553,7 @@ pub fn settle_order_callback_handler(
         owner,
         slot,
         cancelled,
+        done,
     });
     Ok(())
 }

@@ -18,8 +18,33 @@ export interface TokenMeta {
   createdAt: string;
   /** Private supply: sum of all encrypted balances. */
   exchangeSupply?: string;
-  /** Real SPL supply in public wallets. */
+  /** Real SPL supply (includes what sits in the exchange's vault). */
   splSupply?: string;
+  /** Public tokens moved into the exchange's vault (counted in the private supply). */
+  vaultAmount?: string;
+  /** An SPL token the exchange didn't create: moved in and out through the vault only. */
+  isExternal?: boolean;
+  decimals?: number;
+}
+
+/** Tokens in public wallets: the SPL supply minus what sits in the vault. */
+export function publicSupply(token: TokenMeta | null | undefined): bigint {
+  const outside = BigInt(token?.splSupply ?? "0") - BigInt(token?.vaultAmount ?? "0");
+  return outside > 0n ? outside : 0n;
+}
+
+/** One LP holder's share of a pool's swap fees; the lifetime total is encrypted to them. */
+export interface LpPositionRecord {
+  address: string;
+  pool: string;
+  owner: string;
+  earnedCt: string; // base64
+  earnedNonce: string;
+  earnedInitialized: boolean;
+  /** The pool's trade count their payouts cover. */
+  paidSwapCount: number;
+  paidAt: number;
+  pending: boolean;
 }
 
 /** An encrypted token account as stored on-chain: the balance is still a ciphertext. */
@@ -36,6 +61,8 @@ export interface EtaRecord {
   unshieldSaltCt: string; // base64
   unshieldSaltNonce: string;
   unshieldAmount: string;
+  /** Tokens already in the vault whose private credit hasn't landed yet. */
+  shieldOwed?: string;
   token: TokenMeta | null;
 }
 
@@ -52,6 +79,8 @@ export interface PoolRecord {
   createdAt: number;
   lastTradeAt: number;
   busy: boolean;
+  /** Swap fees are tracked for LP holders (from the first trade after the fee upgrade). */
+  feesOn?: boolean;
   token: TokenMeta | null;
   privateSupply: string;
   splSupply: string;
@@ -70,6 +99,14 @@ export interface BookRecord {
   createdAt: number;
   lastActivityAt: number;
   busy: boolean;
+  /** Slots that traded and are being settled into their owners' balances (one bit per slot). */
+  settleMask: number;
+  /** Last trade price, micro-USDC per token ("0" = no trade yet). Public. */
+  lastPrice: string;
+  lastTradeAt: number;
+  trades: number;
+  /** Public trade prices (micro-USDC per token), oldest first. */
+  history: { price: string; time: number }[];
   token: TokenMeta | null;
   /** The pool's public price (USDC per token × 1e12), as a reference, if a pool exists. */
   poolPrice: string | null;
@@ -116,6 +153,8 @@ export const listPools = () => request<PoolRecord[]>("/api/pools");
 export const getPool = (tokenMint: string) => request<PoolRecord>(`/api/pools/${tokenMint}`);
 
 export const listEtas = (owner: string) => request<EtaRecord[]>(`/api/etas?owner=${owner}`);
+
+export const listLpPositions = (owner: string) => request<LpPositionRecord[]>(`/api/lp-positions?owner=${owner}`);
 
 /** Asks the backend to re-read these accounts now (after our own transaction). */
 export function syncAccounts(addresses: string[]): Promise<void> {

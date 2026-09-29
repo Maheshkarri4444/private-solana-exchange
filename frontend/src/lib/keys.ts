@@ -45,7 +45,3 @@ export function loadKeys(wallet: string): PrivateKeys | null {
   const privateKey = fromHex(hex);
   return { privateKey, publicKey: x25519.getPublicKey(privateKey) };
 }
-
-export function clearKeys(wallet: string) {
-  sessionStorage.removeItem(storageKey(wallet));
-}

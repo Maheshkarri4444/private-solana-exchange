@@ -54,4 +54,16 @@ pub enum ErrorCode {
     TooManyOrders,
     #[msg("This order belongs to someone else")]
     NotOrderOwner,
+    #[msg("Unknown order type")]
+    InvalidOrderKind,
+    #[msg("This order has nothing to settle")]
+    NothingToSettle,
+    #[msg("No new trades since the last LP fee payout")]
+    NothingToCollect,
+    #[msg("LP tokens stay private: fees are paid to the LP positions")]
+    LpTokensStayPrivate,
+    #[msg("The vault does not hold enough of this token")]
+    NotEnoughInVault,
+    #[msg("Amount must be greater than zero (or a failed deposit must be pending)")]
+    NothingToShield,
 }

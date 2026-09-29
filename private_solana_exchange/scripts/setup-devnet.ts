@@ -94,11 +94,12 @@ async function main() {
   const circuits = {
     credit_balance: (url: string) => program.methods.initCreditBalanceCompDef(url),
     seed_pool: (url: string) => program.methods.initSeedPoolCompDef(url),
-    swap: (url: string) => program.methods.initSwapCompDef(url),
+    pool_swap: (url: string) => program.methods.initPoolSwapCompDef(url),
+    lp_collect: (url: string) => program.methods.initLpCollectCompDef(url),
     commit_balance: (url: string) => program.methods.initCommitBalanceCompDef(url),
     debit_balance: (url: string) => program.methods.initDebitBalanceCompDef(url),
-    place_order: (url: string) => program.methods.initPlaceOrderCompDef(url),
-    settle_order: (url: string) => program.methods.initSettleOrderCompDef(url),
+    book_place: (url: string) => program.methods.initBookPlaceCompDef(url),
+    book_settle: (url: string) => program.methods.initBookSettleCompDef(url),
   };
   const mxeAccount = getMXEAccAddress(program.programId);
   const mxe = await getArciumProgram(provider).account.mxeAccount.fetch(mxeAccount);

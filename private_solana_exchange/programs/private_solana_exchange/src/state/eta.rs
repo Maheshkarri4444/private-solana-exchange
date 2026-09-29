@@ -2,6 +2,10 @@ use anchor_lang::prelude::*;
 
 use crate::constants::ETA_LOCK_TIMEOUT_SLOTS;
 
+/// `credit_kind`: where a pending credit comes from.
+pub const CREDIT_MINT: u8 = 0;
+pub const CREDIT_SHIELD: u8 = 1;
+
 /// Unshield steps: idle → committing (MPC) → ready (prove) → debiting (MPC) → idle.
 pub const UNSHIELD_NONE: u8 = 0;
 pub const UNSHIELD_COMMITTING: u8 = 1;
@@ -42,7 +46,12 @@ pub struct EncryptedTokenAccount {
     pub unshield_salt_nonce: u128,
     /// Amount already minted to the wallet and waiting to be debited.
     pub unshield_amount: u64,
-    pub reserved: [u8; 39],
+    /// What the pending credit is: faucet / creator mint, or a shield deposit.
+    pub credit_kind: u8,
+    /// Tokens already moved into the vault by `shield` but not yet credited
+    /// (credited by the MPC callback; re-sent if that job fails).
+    pub shield_owed: u64,
+    pub reserved: [u8; 30],
 }
 
 impl EncryptedTokenAccount {

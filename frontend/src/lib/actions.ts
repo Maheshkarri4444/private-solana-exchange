@@ -7,7 +7,8 @@ import {
 import { Keypair, PublicKey, Transaction, type TransactionInstruction } from "@solana/web3.js";
 import type { Send } from "@/hooks/usePrivateAccount";
 import { syncAccounts, uploadMetadata } from "./api";
-import { arciumAccounts, decryptBalance, encryptValues, newComputationOffset } from "./arcium";
+import { arciumAccounts, decryptBalance, decryptValues, encryptValues, newComputationOffset } from "./arcium";
+import { LOT, type OrderKind, unpackView } from "./books";
 import type { PrivateKeys } from "./keys";
 import { type ExchangeProgram, pdas } from "./program";
 import { proveUnshield } from "./zk";
@@ -126,6 +127,7 @@ export async function mintPrivate(
     .accountsPartial({
       payer: owner,
       tokenInfo: pdas.tokenInfo(mint),
+      tokenMint: mint,
       eta,
       ...arciumAccounts("credit_balance", computationOffset),
     })
@@ -134,6 +136,104 @@ export async function mintPrivate(
 
   const result = await waitForEta(program, eta, previousNonce);
   await sync(eta, pdas.tokenInfo(mint));
+  return { signature, result };
+}
+
+/** The SPL token program that owns a mint (Token-2022 for exchange tokens; outside tokens vary). */
+async function tokenProgramOf(program: ExchangeProgram, mint: PublicKey): Promise<PublicKey> {
+  const info = await program.provider.connection.getAccountInfo(mint);
+  if (!info) throw new Error("Token mint not found");
+  return info.owner;
+}
+
+export type ShieldStep = "setup" | "deposit" | "credit" | "done";
+
+/**
+ * Moves public SPL tokens from the wallet into the private balance. They are
+ * not burned: they wait in the exchange's vault, so moving out later pays from
+ * there first.
+ * 1. first time only: list the token, open its vault and your private account
+ * 2. send the tokens to the vault
+ * 3. Arcium adds the same amount to your encrypted balance
+ * `amount = 0` re-sends a credit that failed (the tokens are already in the vault).
+ */
+export async function shield(
+  program: ExchangeProgram,
+  send: Send,
+  owner: PublicKey,
+  input: { mint: PublicKey; source: PublicKey; amount: bigint },
+  onStep: (step: ShieldStep) => void,
+): Promise<{ signature: string; result: MpcResult }> {
+  const { mint, source, amount } = input;
+  const tokenProgram = await tokenProgramOf(program, mint);
+  const tokenInfo = pdas.tokenInfo(mint);
+  const vault = pdas.vault(mint);
+  const eta = pdas.eta(owner, mint);
+
+  const [infoAccount, vaultAccount, etaAccount] = await program.provider.connection.getMultipleAccountsInfo([
+    tokenInfo,
+    vault,
+    eta,
+  ]);
+  const setup: TransactionInstruction[] = [];
+  if (!infoAccount) {
+    setup.push(
+      await program.methods
+        .registerExternalToken()
+        .accountsPartial({ payer: owner, mint, tokenInfo, tokenProgram })
+        .instruction(),
+    );
+  }
+  if (!vaultAccount) {
+    setup.push(
+      await program.methods
+        .openVault()
+        .accountsPartial({
+          payer: owner,
+          config: pdas.config(),
+          tokenInfo,
+          mint,
+          mintAuthority: pdas.mintAuthority(),
+          vault,
+          tokenProgram,
+        })
+        .instruction(),
+    );
+  }
+  if (!etaAccount) {
+    setup.push(await program.methods.openAccount().accountsPartial({ owner, tokenInfo, eta }).instruction());
+  }
+  if (setup.length > 0) {
+    onStep("setup");
+    await send(new Transaction().add(...setup));
+  }
+
+  onStep("deposit");
+  const [info, before] = await Promise.all([
+    program.account.tokenInfo.fetch(tokenInfo),
+    program.account.encryptedTokenAccount.fetch(eta),
+  ]);
+  const computationOffset = newComputationOffset();
+  const tx = await program.methods
+    .shield(computationOffset, new BN(amount.toString()))
+    .accountsPartial({
+      payer: owner,
+      tokenInfo,
+      tokenCreator: info.creator,
+      mint,
+      source,
+      vault,
+      eta,
+      tokenProgram,
+      ...arciumAccounts("credit_balance", computationOffset),
+    })
+    .transaction();
+  const signature = await send(tx);
+
+  onStep("credit");
+  const result = await waitForEta(program, eta, before.nonce.toString());
+  await sync(eta, tokenInfo);
+  onStep("done");
   return { signature, result };
 }
 
@@ -300,7 +400,7 @@ export async function swap(
   const openIxs = await openMissingAccounts(program, owner, [input.tokenMint, input.usdcMint]);
   const order = encryptValues(keys.privateKey, mxePublicKey, [input.amountIn, input.minOut, input.maxOut]);
   const computationOffset = newComputationOffset();
-  const arcium = arciumAccounts("swap", computationOffset);
+  const arcium = arciumAccounts("pool_swap", computationOffset);
 
   const tx = await program.methods
     .swap(computationOffset, input.isBuy, order.ct, order.nonce)
@@ -362,7 +462,8 @@ async function finishIx(program: ExchangeProgram, owner: PublicKey, eta: PublicK
  * Moves tokens from the encrypted balance to the public wallet as real SPL tokens.
  * 1. Arcium fingerprints the balance: SHA3(balance ‖ salt)  (skipped if already done)
  * 2. this browser proves in zero knowledge that the balance covers `amount`
- * 3. the program checks the proof and mints; Arcium subtracts `amount` (one transaction)
+ * 3. the program checks the proof and sends the tokens (from its vault first,
+ *    minting the rest); Arcium subtracts `amount` (one transaction)
  */
 export async function unshield(
   program: ExchangeProgram,
@@ -384,9 +485,16 @@ export async function unshield(
   onStep("fingerprint");
   if (account.unshieldState === UNSHIELD.NONE) {
     const computationOffset = newComputationOffset();
+    const info = await program.account.tokenInfo.fetch(pdas.tokenInfo(mint));
     const tx = await program.methods
       .prepareUnshield(computationOffset)
-      .accountsPartial({ payer: owner, eta, ...arciumAccounts("commit_balance", computationOffset) })
+      .accountsPartial({
+        payer: owner,
+        eta,
+        tokenInfo: pdas.tokenInfo(mint),
+        tokenCreator: info.creator,
+        ...arciumAccounts("commit_balance", computationOffset),
+      })
       .transaction();
     await send(tx);
   }
@@ -407,7 +515,8 @@ export async function unshield(
   );
 
   onStep("mint");
-  const destination = getAssociatedTokenAddressSync(mint, owner, false, TOKEN_2022_PROGRAM_ID);
+  const tokenProgram = await tokenProgramOf(program, mint);
+  const destination = getAssociatedTokenAddressSync(mint, owner, false, tokenProgram);
   const tx = await program.methods
     .unshield(new BN(amount.toString()), proof)
     .accountsPartial({
@@ -416,11 +525,12 @@ export async function unshield(
       tokenInfo: pdas.tokenInfo(mint),
       mint,
       destination,
+      vault: pdas.vault(mint),
       config: pdas.config(),
-      tokenProgram: TOKEN_2022_PROGRAM_ID,
+      tokenProgram,
     })
     .preInstructions([
-      createAssociatedTokenAccountIdempotentInstruction(owner, destination, owner, mint, TOKEN_2022_PROGRAM_ID),
+      createAssociatedTokenAccountIdempotentInstruction(owner, destination, owner, mint, tokenProgram),
     ])
     .postInstructions([await finishIx(program, owner, eta)])
     .transaction();
@@ -479,10 +589,23 @@ async function waitForBook(program: ExchangeProgram, book: PublicKey, computatio
   return account;
 }
 
+export interface PlaceResult {
+  /** False: refused (not enough balance, or a post-only order that would trade). */
+  ok: boolean;
+  /** The unfilled part waits in the book. */
+  rests: boolean;
+  /** Whole tokens that traded right away. */
+  filled: bigint;
+  /** USDC (base units) paid for a buy / received for a sell, for those fills. */
+  quote: bigint;
+  signature: string;
+}
+
 /**
- * Places a private limit order. Side, price and size are encrypted here; Arcium
- * locks the funds from your private balance, adds the order to the book and
- * matches it. Anything that fills right away lands in your balances.
+ * Places a private order. Side, price and size are encrypted here; Arcium locks
+ * the funds from your private balance and matches it. Anything that fills right
+ * away lands in your balances; a limit order's rest waits in the book, a market
+ * order's rest comes back.
  */
 export async function placeOrder(
   program: ExchangeProgram,
@@ -490,19 +613,25 @@ export async function placeOrder(
   owner: PublicKey,
   keys: PrivateKeys,
   mxePublicKey: Uint8Array,
-  input: { tokenMint: PublicKey; usdcMint: PublicKey; isBuy: boolean; price: bigint; lots: bigint },
-): Promise<{ ok: boolean; signature: string }> {
+  input: { tokenMint: PublicKey; usdcMint: PublicKey; isBuy: boolean; price: bigint; lots: bigint; kind: OrderKind },
+): Promise<PlaceResult> {
   const book = pdas.book(input.tokenMint);
   const usdcEta = pdas.eta(owner, input.usdcMint);
   const tokenEta = pdas.eta(owner, input.tokenMint);
-  const before = await program.account.orderBook.fetch(book);
+  const balances = () =>
+    Promise.all([
+      program.account.encryptedTokenAccount.fetchNullable(usdcEta),
+      readBalance(program, keys, mxePublicKey, owner, input.usdcMint),
+      readBalance(program, keys, mxePublicKey, owner, input.tokenMint),
+    ]);
+  const [etaBefore, usdcBefore, tokenBefore] = await balances();
   const openIxs = await openMissingAccounts(program, owner, [input.tokenMint, input.usdcMint]);
   const order = encryptValues(keys.privateKey, mxePublicKey, [input.isBuy ? 1n : 0n, input.price, input.lots]);
   const computationOffset = newComputationOffset();
-  const arcium = arciumAccounts("place_order", computationOffset);
+  const arcium = arciumAccounts("book_place", computationOffset);
 
   const tx = await program.methods
-    .placeOrder(computationOffset, order.ct, order.nonce)
+    .placeOrder(computationOffset, order.ct, order.nonce, input.kind)
     .accountsPartial({ payer: owner, config: pdas.config(), book, usdcEta, tokenEta, ...arcium })
     .preInstructions(openIxs)
     .transaction();
@@ -510,11 +639,29 @@ export async function placeOrder(
 
   const after = await waitForBook(program, book, arcium.computationAccount);
   await sync(book, pdas.bookViews(book), usdcEta, tokenEta);
-  // A rejected order (not enough balance) leaves the book as it was.
-  return { ok: after.ordersPlaced.gt(before.ordersPlaced), signature };
+  const [etaAfter, usdcAfter, tokenAfter] = await balances();
+
+  // A refused order leaves your balances untouched (not even re-encrypted).
+  const ok = !!etaAfter && etaAfter.nonce.toString() !== (etaBefore?.nonce.toString() ?? "");
+  const slot = after.pendingSlot;
+  const rests = ok && after.seqs[slot].toString() === after.ordersPlaced.toString() && after.owners[slot].equals(owner);
+  let filled: bigint;
+  let quote: bigint;
+  if (rests) {
+    // Resting order: our own copy says what traded on arrival.
+    const views = await program.account.orderViews.fetch(pdas.bookViews(book));
+    const view = unpackView(decryptValues(keys.privateKey, mxePublicKey, views.views[slot], views.nonces[slot]));
+    filled = view.lots - view.remaining;
+    quote = view.quote;
+  } else {
+    // Nothing waits in the book, so the balance changes are exactly the fills.
+    filled = (input.isBuy ? tokenAfter - tokenBefore : tokenBefore - tokenAfter) / LOT;
+    quote = input.isBuy ? usdcBefore - usdcAfter : usdcAfter - usdcBefore;
+  }
+  return { ok, rests, filled: ok ? filled : 0n, quote: ok ? quote : 0n, signature };
 }
 
-/** Collects an order's fills into your balances; `cancel` also returns what is still locked. */
+/** Cancels your order: fills and whatever is still locked go back to your balances. */
 export async function settleOrder(
   program: ExchangeProgram,
   send: Send,
@@ -525,7 +672,7 @@ export async function settleOrder(
   const usdcEta = pdas.eta(owner, input.usdcMint);
   const tokenEta = pdas.eta(owner, input.tokenMint);
   const computationOffset = newComputationOffset();
-  const arcium = arciumAccounts("settle_order", computationOffset);
+  const arcium = arciumAccounts("book_settle", computationOffset);
 
   const tx = await program.methods
     .settleOrder(computationOffset, input.slot, input.cancel)

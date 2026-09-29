@@ -8,6 +8,148 @@
   },
   "instructions": [
     {
+      "name": "book_place_callback",
+      "discriminator": [
+        132,
+        123,
+        13,
+        228,
+        103,
+        255,
+        157,
+        87
+      ],
+      "accounts": [
+        {
+          "name": "arcium_program",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "comp_def_account"
+        },
+        {
+          "name": "mxe_account"
+        },
+        {
+          "name": "computation_account"
+        },
+        {
+          "name": "cluster_account"
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "book",
+          "writable": true
+        },
+        {
+          "name": "views",
+          "writable": true
+        },
+        {
+          "name": "usdc_eta",
+          "writable": true
+        },
+        {
+          "name": "token_eta",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "output",
+          "type": {
+            "defined": {
+              "name": "SignedComputationOutputs",
+              "generics": [
+                {
+                  "kind": "type",
+                  "type": {
+                    "defined": {
+                      "name": "BookPlaceOutput"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "book_settle_callback",
+      "discriminator": [
+        65,
+        91,
+        158,
+        16,
+        44,
+        204,
+        165,
+        111
+      ],
+      "accounts": [
+        {
+          "name": "arcium_program",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "comp_def_account"
+        },
+        {
+          "name": "mxe_account"
+        },
+        {
+          "name": "computation_account"
+        },
+        {
+          "name": "cluster_account"
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "book",
+          "writable": true
+        },
+        {
+          "name": "views",
+          "writable": true
+        },
+        {
+          "name": "usdc_eta",
+          "writable": true
+        },
+        {
+          "name": "token_eta",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "output",
+          "type": {
+            "defined": {
+              "name": "SignedComputationOutputs",
+              "generics": [
+                {
+                  "kind": "type",
+                  "type": {
+                    "defined": {
+                      "name": "BookSettleOutput"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "cancel_unshield",
       "docs": [
         "Unfreeze an account whose move to wallet stopped before step 2."
@@ -33,6 +175,133 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "collect_lp_fees",
+      "docs": [
+        "Pay an LP holder their share of the swap fees since the last payout",
+        "(anyone may send it; the fees always go to the holder)."
+      ],
+      "discriminator": [
+        8,
+        174,
+        201,
+        78,
+        141,
+        117,
+        163,
+        33
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "lp_eta",
+          "docs": [
+            "Only read: its ciphertext goes to Arcium as is."
+          ]
+        },
+        {
+          "name": "usdc_eta",
+          "writable": true
+        },
+        {
+          "name": "token_eta",
+          "writable": true
+        },
+        {
+          "name": "sign_pda_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  65,
+                  114,
+                  99,
+                  105,
+                  117,
+                  109,
+                  83,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114,
+                  65,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxe_account"
+        },
+        {
+          "name": "mempool_account",
+          "writable": true
+        },
+        {
+          "name": "executing_pool",
+          "writable": true
+        },
+        {
+          "name": "computation_account",
+          "writable": true
+        },
+        {
+          "name": "comp_def_account"
+        },
+        {
+          "name": "cluster_account",
+          "writable": true
+        },
+        {
+          "name": "pool_account",
+          "writable": true,
+          "address": "G2sRWJvi3xoyh5k2gY49eG9L8YhAEWQPtNb1zb1GXTtC"
+        },
+        {
+          "name": "clock_account",
+          "writable": true,
+          "address": "7EbMUTLo5DjdzbN7s8BXeZwXzEwNQb1hScfRvWg8a6ot"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "arcium_program",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        }
+      ],
+      "args": [
+        {
+          "name": "computation_offset",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "commit_balance_callback",
@@ -720,6 +989,152 @@
       ]
     },
     {
+      "name": "init_book_place_comp_def",
+      "docs": [
+        "One-time setup: register the `book_place` MPC circuit."
+      ],
+      "discriminator": [
+        180,
+        234,
+        10,
+        135,
+        46,
+        57,
+        218,
+        202
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxe_account",
+          "writable": true
+        },
+        {
+          "name": "comp_def_account",
+          "writable": true
+        },
+        {
+          "name": "address_lookup_table",
+          "writable": true
+        },
+        {
+          "name": "lut_program",
+          "address": "AddressLookupTab1e1111111111111111111111111"
+        },
+        {
+          "name": "arcium_program",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "circuit_url",
+          "type": {
+            "option": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "init_book_settle_comp_def",
+      "docs": [
+        "One-time setup: register the `book_settle` MPC circuit."
+      ],
+      "discriminator": [
+        203,
+        87,
+        125,
+        27,
+        246,
+        231,
+        35,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxe_account",
+          "writable": true
+        },
+        {
+          "name": "comp_def_account",
+          "writable": true
+        },
+        {
+          "name": "address_lookup_table",
+          "writable": true
+        },
+        {
+          "name": "lut_program",
+          "address": "AddressLookupTab1e1111111111111111111111111"
+        },
+        {
+          "name": "arcium_program",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "circuit_url",
+          "type": {
+            "option": "string"
+          }
+        }
+      ]
+    },
+    {
       "name": "init_commit_balance_comp_def",
       "docs": [
         "One-time setup: register the `commit_balance` MPC circuit."
@@ -1065,19 +1480,92 @@
       ]
     },
     {
-      "name": "init_place_order_comp_def",
+      "name": "init_lp_collect_comp_def",
       "docs": [
-        "One-time setup: register the `place_order` MPC circuit."
+        "One-time setup: register the `lp_collect` MPC circuit."
       ],
       "discriminator": [
-        245,
-        242,
-        169,
-        71,
-        130,
-        168,
-        97,
-        247
+        197,
+        111,
+        24,
+        228,
+        125,
+        142,
+        252,
+        8
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mxe_account",
+          "writable": true
+        },
+        {
+          "name": "comp_def_account",
+          "writable": true
+        },
+        {
+          "name": "address_lookup_table",
+          "writable": true
+        },
+        {
+          "name": "lut_program",
+          "address": "AddressLookupTab1e1111111111111111111111111"
+        },
+        {
+          "name": "arcium_program",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "circuit_url",
+          "type": {
+            "option": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "init_pool_swap_comp_def",
+      "docs": [
+        "One-time setup: register the `pool_swap` MPC circuit."
+      ],
+      "discriminator": [
+        3,
+        118,
+        192,
+        15,
+        236,
+        101,
+        77,
+        176
       ],
       "accounts": [
         {
@@ -1211,147 +1699,72 @@
       ]
     },
     {
-      "name": "init_settle_order_comp_def",
-      "docs": [
-        "One-time setup: register the `settle_order` MPC circuit."
-      ],
+      "name": "lp_collect_callback",
       "discriminator": [
-        67,
-        15,
-        39,
-        176,
-        55,
-        232,
-        221,
-        106
+        1,
+        159,
+        123,
+        246,
+        17,
+        6,
+        111,
+        21
       ],
       "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "mxe_account",
-          "writable": true
-        },
-        {
-          "name": "comp_def_account",
-          "writable": true
-        },
-        {
-          "name": "address_lookup_table",
-          "writable": true
-        },
-        {
-          "name": "lut_program",
-          "address": "AddressLookupTab1e1111111111111111111111111"
-        },
         {
           "name": "arcium_program",
           "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "name": "comp_def_account"
+        },
+        {
+          "name": "mxe_account"
+        },
+        {
+          "name": "computation_account"
+        },
+        {
+          "name": "cluster_account"
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "usdc_eta",
+          "writable": true
+        },
+        {
+          "name": "token_eta",
+          "writable": true
         }
       ],
       "args": [
         {
-          "name": "circuit_url",
+          "name": "output",
           "type": {
-            "option": "string"
-          }
-        }
-      ]
-    },
-    {
-      "name": "init_swap_comp_def",
-      "docs": [
-        "One-time setup: register the `swap` MPC circuit."
-      ],
-      "discriminator": [
-        193,
-        180,
-        211,
-        206,
-        171,
-        241,
-        40,
-        211
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "mxe_account",
-          "writable": true
-        },
-        {
-          "name": "comp_def_account",
-          "writable": true
-        },
-        {
-          "name": "address_lookup_table",
-          "writable": true
-        },
-        {
-          "name": "lut_program",
-          "address": "AddressLookupTab1e1111111111111111111111111"
-        },
-        {
-          "name": "arcium_program",
-          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "circuit_url",
-          "type": {
-            "option": "string"
+            "defined": {
+              "name": "SignedComputationOutputs",
+              "generics": [
+                {
+                  "kind": "type",
+                  "type": {
+                    "defined": {
+                      "name": "LpCollectOutput"
+                    }
+                  }
+                }
+              ]
+            }
           }
         }
       ]
@@ -1418,6 +1831,12 @@
               }
             ]
           }
+        },
+        {
+          "name": "token_mint",
+          "docs": [
+            "toward the max supply too)."
+          ]
         },
         {
           "name": "eta",
@@ -1624,9 +2043,193 @@
       "args": []
     },
     {
+      "name": "open_lp_position",
+      "docs": [
+        "Open the record that tracks one holder's share of a pool's swap fees (anyone)."
+      ],
+      "discriminator": [
+        162,
+        192,
+        10,
+        152,
+        68,
+        254,
+        183,
+        198
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "pool"
+        },
+        {
+          "name": "owner"
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  102,
+                  101,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "open_vault",
+      "docs": [
+        "Open the program's vault (token account) for a mint (anyone)."
+      ],
+      "discriminator": [
+        181,
+        248,
+        228,
+        67,
+        6,
+        175,
+        37,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_info",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "mint_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "place_order",
       "docs": [
-        "Place a limit order; side, price and size are encrypted in the browser."
+        "Place an order (`kind`: 0 limit, 1 market, 2 post-only); side, price and",
+        "size are encrypted in the browser."
       ],
       "discriminator": [
         51,
@@ -1760,20 +2363,24 @@
         {
           "name": "order_nonce",
           "type": "u128"
+        },
+        {
+          "name": "kind",
+          "type": "u8"
         }
       ]
     },
     {
-      "name": "place_order_callback",
+      "name": "pool_swap_callback",
       "discriminator": [
-        246,
-        190,
-        154,
-        146,
-        44,
-        11,
+        141,
+        93,
+        98,
+        25,
+        170,
         105,
-        44
+        118,
+        219
       ],
       "accounts": [
         {
@@ -1797,11 +2404,7 @@
           "address": "Sysvar1nstructions1111111111111111111111111"
         },
         {
-          "name": "book",
-          "writable": true
-        },
-        {
-          "name": "views",
+          "name": "pool",
           "writable": true
         },
         {
@@ -1824,7 +2427,7 @@
                   "kind": "type",
                   "type": {
                     "defined": {
-                      "name": "PlaceOrderOutput"
+                      "name": "PoolSwapOutput"
                     }
                   }
                 }
@@ -1858,6 +2461,34 @@
         {
           "name": "eta",
           "writable": true
+        },
+        {
+          "name": "token_info",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "eta.mint",
+                "account": "EncryptedTokenAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_creator",
+          "docs": [
+            "LP token, which stays private: its fees are paid to LP positions."
+          ]
         },
         {
           "name": "sign_pda_account",
@@ -1938,6 +2569,65 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "register_external_token",
+      "docs": [
+        "List an SPL token this exchange didn't create, so it can be moved in (anyone)."
+      ],
+      "discriminator": [
+        66,
+        98,
+        185,
+        182,
+        223,
+        134,
+        66,
+        225
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_info",
+          "docs": [
+            "Exchange-created mints already have one, so this only works for outside mints."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "register_user",
@@ -2239,7 +2929,8 @@
     {
       "name": "settle_order",
       "docs": [
-        "Collect an order's fills into your balances; `cancel` also refunds the rest."
+        "Settle a traded order into its owner's balances (anyone); `cancel` also",
+        "returns what is still locked (owner only)."
       ],
       "discriminator": [
         80,
@@ -2361,73 +3052,175 @@
       ]
     },
     {
-      "name": "settle_order_callback",
+      "name": "shield",
+      "docs": [
+        "Move public SPL tokens from your wallet into your private balance."
+      ],
       "discriminator": [
-        35,
-        33,
-        29,
-        174,
-        37,
-        122,
-        99,
-        241
+        220,
+        198,
+        253,
+        246,
+        231,
+        84,
+        147,
+        98
       ],
       "accounts": [
         {
-          "name": "arcium_program",
-          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+          "name": "payer",
+          "writable": true,
+          "signer": true
         },
         {
-          "name": "comp_def_account"
+          "name": "token_info",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_info.mint",
+                "account": "TokenInfo"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_creator",
+          "docs": [
+            "LP token, which stays private."
+          ]
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "eta",
+          "docs": [
+            "Must exist (see `open_account`)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "sign_pda_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  65,
+                  114,
+                  99,
+                  105,
+                  117,
+                  109,
+                  83,
+                  105,
+                  103,
+                  110,
+                  101,
+                  114,
+                  65,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "mxe_account"
         },
         {
-          "name": "computation_account"
-        },
-        {
-          "name": "cluster_account"
-        },
-        {
-          "name": "instructions_sysvar",
-          "address": "Sysvar1nstructions1111111111111111111111111"
-        },
-        {
-          "name": "book",
+          "name": "mempool_account",
           "writable": true
         },
         {
-          "name": "views",
+          "name": "executing_pool",
           "writable": true
         },
         {
-          "name": "usdc_eta",
+          "name": "computation_account",
           "writable": true
         },
         {
-          "name": "token_eta",
+          "name": "comp_def_account"
+        },
+        {
+          "name": "cluster_account",
           "writable": true
+        },
+        {
+          "name": "pool_account",
+          "writable": true,
+          "address": "G2sRWJvi3xoyh5k2gY49eG9L8YhAEWQPtNb1zb1GXTtC"
+        },
+        {
+          "name": "clock_account",
+          "writable": true,
+          "address": "7EbMUTLo5DjdzbN7s8BXeZwXzEwNQb1hScfRvWg8a6ot"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "arcium_program",
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
         }
       ],
       "args": [
         {
-          "name": "output",
-          "type": {
-            "defined": {
-              "name": "SignedComputationOutputs",
-              "generics": [
-                {
-                  "kind": "type",
-                  "type": {
-                    "defined": {
-                      "name": "SettleOrderOutput"
-                    }
-                  }
-                }
-              ]
-            }
-          }
+          "name": "computation_offset",
+          "type": "u64"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
         }
       ]
     },
@@ -2582,76 +3375,10 @@
       ]
     },
     {
-      "name": "swap_callback",
-      "discriminator": [
-        103,
-        125,
-        93,
-        121,
-        54,
-        18,
-        238,
-        141
-      ],
-      "accounts": [
-        {
-          "name": "arcium_program",
-          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
-        },
-        {
-          "name": "comp_def_account"
-        },
-        {
-          "name": "mxe_account"
-        },
-        {
-          "name": "computation_account"
-        },
-        {
-          "name": "cluster_account"
-        },
-        {
-          "name": "instructions_sysvar",
-          "address": "Sysvar1nstructions1111111111111111111111111"
-        },
-        {
-          "name": "pool",
-          "writable": true
-        },
-        {
-          "name": "usdc_eta",
-          "writable": true
-        },
-        {
-          "name": "token_eta",
-          "writable": true
-        }
-      ],
-      "args": [
-        {
-          "name": "output",
-          "type": {
-            "defined": {
-              "name": "SignedComputationOutputs",
-              "generics": [
-                {
-                  "kind": "type",
-                  "type": {
-                    "defined": {
-                      "name": "SwapOutput"
-                    }
-                  }
-                }
-              ]
-            }
-          }
-        }
-      ]
-    },
-    {
       "name": "unshield",
       "docs": [
-        "Move to wallet, step 2: verify the ZK proof and mint real SPL tokens."
+        "Move to wallet, step 2: verify the ZK proof and send real SPL tokens",
+        "(from the vault first, minting the rest only for exchange-made tokens)."
       ],
       "discriminator": [
         21,
@@ -2686,6 +3413,29 @@
             "Any token account of the owner for this mint (clients use the ATA)."
           ],
           "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "eta.mint",
+                "account": "EncryptedTokenAccount"
+              }
+            ]
+          }
         },
         {
           "name": "config",
@@ -2732,8 +3482,7 @@
           }
         },
         {
-          "name": "token_program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+          "name": "token_program"
         }
       ],
       "args": [
@@ -2790,6 +3539,19 @@
         77,
         62,
         75
+      ]
+    },
+    {
+      "name": "LpPosition",
+      "discriminator": [
+        105,
+        241,
+        37,
+        200,
+        224,
+        2,
+        252,
+        90
       ]
     },
     {
@@ -2886,6 +3648,19 @@
       ]
     },
     {
+      "name": "LpFeesPaid",
+      "discriminator": [
+        34,
+        40,
+        131,
+        88,
+        76,
+        88,
+        219,
+        66
+      ]
+    },
+    {
       "name": "MintQueued",
       "discriminator": [
         81,
@@ -2961,6 +3736,19 @@
         214,
         72,
         245
+      ]
+    },
+    {
+      "name": "Shielded",
+      "discriminator": [
+        241,
+        61,
+        122,
+        176,
+        176,
+        134,
+        122,
+        191
       ]
     },
     {
@@ -3159,6 +3947,36 @@
       "code": 6025,
       "name": "NotOrderOwner",
       "msg": "This order belongs to someone else"
+    },
+    {
+      "code": 6026,
+      "name": "InvalidOrderKind",
+      "msg": "Unknown order type"
+    },
+    {
+      "code": 6027,
+      "name": "NothingToSettle",
+      "msg": "This order has nothing to settle"
+    },
+    {
+      "code": 6028,
+      "name": "NothingToCollect",
+      "msg": "No new trades since the last LP fee payout"
+    },
+    {
+      "code": 6029,
+      "name": "LpTokensStayPrivate",
+      "msg": "LP tokens stay private: fees are paid to the LP positions"
+    },
+    {
+      "code": 6030,
+      "name": "NotEnoughInVault",
+      "msg": "The vault does not hold enough of this token"
+    },
+    {
+      "code": 6031,
+      "name": "NothingToShield",
+      "msg": "Amount must be greater than zero (or a failed deposit must be pending)"
     }
   ],
   "types": [
@@ -3228,6 +4046,210 @@
           {
             "name": "amount",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BookPlaceOutput",
+      "docs": [
+        "The output of the callback instruction. Provided as a struct with ordered fields",
+        "as anchor does not support tuples and tuple structs yet."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field_0",
+            "type": {
+              "defined": {
+                "name": "BookPlaceOutputStruct0"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BookPlaceOutputStruct0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field_0",
+            "type": {
+              "defined": {
+                "name": "SharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_1",
+            "type": {
+              "defined": {
+                "name": "SharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_2",
+            "type": {
+              "defined": {
+                "name": "MXEEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "8"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_3",
+            "type": {
+              "defined": {
+                "name": "SharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_4",
+            "type": {
+              "defined": {
+                "name": "BookPlaceOutputStruct04"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BookPlaceOutputStruct04",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field_0",
+            "type": "bool"
+          },
+          {
+            "name": "field_1",
+            "type": "bool"
+          },
+          {
+            "name": "field_2",
+            "type": "u8"
+          },
+          {
+            "name": "field_3",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BookSettleOutput",
+      "docs": [
+        "The output of the callback instruction. Provided as a struct with ordered fields",
+        "as anchor does not support tuples and tuple structs yet."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field_0",
+            "type": {
+              "defined": {
+                "name": "BookSettleOutputStruct0"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BookSettleOutputStruct0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field_0",
+            "type": {
+              "defined": {
+                "name": "SharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_1",
+            "type": {
+              "defined": {
+                "name": "SharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_2",
+            "type": {
+              "defined": {
+                "name": "MXEEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "8"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_3",
+            "type": {
+              "defined": {
+                "name": "SharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_4",
+            "type": "bool"
           }
         ]
       }
@@ -3805,11 +4827,26 @@
             "type": "u64"
           },
           {
+            "name": "credit_kind",
+            "docs": [
+              "What the pending credit is: faucet / creator mint, or a shield deposit."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "shield_owed",
+            "docs": [
+              "Tokens already moved into the vault by `shield` but not yet credited",
+              "(credited by the MPC callback; re-sent if that job fails)."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                39
+                30
               ]
             }
           }
@@ -3972,6 +5009,207 @@
           },
           {
             "name": "MxeKeyRecoveryFinalize"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpCollectOutput",
+      "docs": [
+        "The output of the callback instruction. Provided as a struct with ordered fields",
+        "as anchor does not support tuples and tuple structs yet."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field_0",
+            "type": {
+              "defined": {
+                "name": "LpCollectOutputStruct0"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpCollectOutputStruct0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field_0",
+            "type": {
+              "defined": {
+                "name": "SharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_1",
+            "type": {
+              "defined": {
+                "name": "SharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_2",
+            "type": {
+              "defined": {
+                "name": "MXEEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_3",
+            "type": {
+              "defined": {
+                "name": "SharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpFeesPaid",
+      "docs": [
+        "An LP holder was paid their share of the swap fees (amounts encrypted to them)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpPosition",
+      "docs": [
+        "One LP holder's fee position in one pool. PDA(\"lp_fees\", pool, owner).",
+        "",
+        "`checkpoint` is the pool's fee growth at the last payout (encrypted to the",
+        "cluster); `earned` is the holder's lifetime LP fees, encrypted to them."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "checkpoint_ct",
+            "docs": [
+              "First two fields, so their offsets (8 and 40) are fixed for the MPC job."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "earned_ct",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "checkpoint_nonce",
+            "type": "u128"
+          },
+          {
+            "name": "earned_nonce",
+            "type": "u128"
+          },
+          {
+            "name": "checkpoint_initialized",
+            "type": "bool"
+          },
+          {
+            "name": "earned_initialized",
+            "type": "bool"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "paid_swap_count",
+            "docs": [
+              "The pool's trade count covered by the last payout (public)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "paid_at",
+            "type": "i64"
+          },
+          {
+            "name": "pending_computation",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_since_slot",
+            "type": "u64"
+          },
+          {
+            "name": "pending_swap_count",
+            "docs": [
+              "The pool's trade count when the pending payout was queued."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }
@@ -4349,11 +5587,36 @@
             "type": "u8"
           },
           {
+            "name": "settle_mask",
+            "docs": [
+              "Slots that traded and wait for settlement (one bit per slot)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "last_price",
+            "docs": [
+              "Last trade price (micro-USDC per token) and time: public, like on any exchange."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "last_trade_at",
+            "type": "i64"
+          },
+          {
+            "name": "trades",
+            "docs": [
+              "Orders that traded on arrival."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                64
+                39
               ]
             }
           }
@@ -4363,7 +5626,9 @@
     {
       "name": "OrderPlaced",
       "docs": [
-        "An order joined the book. Its side, price and size stay encrypted."
+        "A new order was matched. Public: whether it now waits in the book, which",
+        "resting orders it traded with (one bit per slot) and its last trade price",
+        "(0 = no trade). Never its side or size."
       ],
       "type": {
         "kind": "struct",
@@ -4379,6 +5644,18 @@
           {
             "name": "slot",
             "type": "u8"
+          },
+          {
+            "name": "rests",
+            "type": "bool"
+          },
+          {
+            "name": "traded",
+            "type": "u8"
+          },
+          {
+            "name": "price",
+            "type": "u64"
           }
         ]
       }
@@ -4405,7 +5682,8 @@
     {
       "name": "OrderSettled",
       "docs": [
-        "An owner collected their fills, or cancelled (`cancelled`) and got the rest back."
+        "An order's fills were settled into its owner's balances. `done`: it left",
+        "the book (fully filled, or `cancelled`)."
       ],
       "type": {
         "kind": "struct",
@@ -4424,6 +5702,10 @@
           },
           {
             "name": "cancelled",
+            "type": "bool"
+          },
+          {
+            "name": "done",
             "type": "bool"
           }
         ]
@@ -4606,94 +5888,6 @@
       }
     },
     {
-      "name": "PlaceOrderOutput",
-      "docs": [
-        "The output of the callback instruction. Provided as a struct with ordered fields",
-        "as anchor does not support tuples and tuple structs yet."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "field_0",
-            "type": {
-              "defined": {
-                "name": "PlaceOrderOutputStruct0"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "PlaceOrderOutputStruct0",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "field_0",
-            "type": {
-              "defined": {
-                "name": "SharedEncryptedStruct",
-                "generics": [
-                  {
-                    "kind": "const",
-                    "value": "1"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "name": "field_1",
-            "type": {
-              "defined": {
-                "name": "SharedEncryptedStruct",
-                "generics": [
-                  {
-                    "kind": "const",
-                    "value": "1"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "name": "field_2",
-            "type": {
-              "defined": {
-                "name": "MXEEncryptedStruct",
-                "generics": [
-                  {
-                    "kind": "const",
-                    "value": "8"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "name": "field_3",
-            "type": {
-              "defined": {
-                "name": "SharedEncryptedStruct",
-                "generics": [
-                  {
-                    "kind": "const",
-                    "value": "1"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "name": "field_4",
-            "type": "bool"
-          }
-        ]
-      }
-    },
-    {
       "name": "Pool",
       "docs": [
         "A token/USDC constant-product pool. PDA(\"pool\", token_mint).",
@@ -4809,7 +6003,7 @@
           {
             "name": "pending_kind",
             "docs": [
-              "What the in-flight job is: 0 = seed, 1 = buy, 2 = sell."
+              "What the in-flight job is: 0 = seed, 1 = buy, 2 = sell, 3 = fee payout."
             ],
             "type": "u8"
           },
@@ -4822,11 +6016,32 @@
             "type": "u8"
           },
           {
+            "name": "fee_growth_ct",
+            "docs": [
+              "Swap fees owed to LP holders, per LP unit (× 2^40), encrypted to the",
+              "cluster. False until the first trade that pays a fee."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "fee_growth_nonce",
+            "type": "u128"
+          },
+          {
+            "name": "fee_growth_initialized",
+            "type": "bool"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                64
+                15
               ]
             }
           }
@@ -4853,6 +6068,118 @@
           {
             "name": "fee_bps",
             "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolSwapOutput",
+      "docs": [
+        "The output of the callback instruction. Provided as a struct with ordered fields",
+        "as anchor does not support tuples and tuple structs yet."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field_0",
+            "type": {
+              "defined": {
+                "name": "PoolSwapOutputStruct0"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolSwapOutputStruct0",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field_0",
+            "type": {
+              "defined": {
+                "name": "SharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_1",
+            "type": {
+              "defined": {
+                "name": "SharedEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_2",
+            "type": {
+              "defined": {
+                "name": "MXEEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "2"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "field_3",
+            "type": {
+              "defined": {
+                "name": "PoolSwapOutputStruct03"
+              }
+            }
+          },
+          {
+            "name": "field_4",
+            "type": {
+              "defined": {
+                "name": "MXEEncryptedStruct",
+                "generics": [
+                  {
+                    "kind": "const",
+                    "value": "1"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolSwapOutputStruct03",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "field_0",
+            "type": "bool"
+          },
+          {
+            "name": "field_1",
+            "type": "f64"
+          },
+          {
+            "name": "field_2",
+            "type": "u8"
           }
         ]
       }
@@ -5062,90 +6389,6 @@
       }
     },
     {
-      "name": "SettleOrderOutput",
-      "docs": [
-        "The output of the callback instruction. Provided as a struct with ordered fields",
-        "as anchor does not support tuples and tuple structs yet."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "field_0",
-            "type": {
-              "defined": {
-                "name": "SettleOrderOutputStruct0"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "SettleOrderOutputStruct0",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "field_0",
-            "type": {
-              "defined": {
-                "name": "SharedEncryptedStruct",
-                "generics": [
-                  {
-                    "kind": "const",
-                    "value": "1"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "name": "field_1",
-            "type": {
-              "defined": {
-                "name": "SharedEncryptedStruct",
-                "generics": [
-                  {
-                    "kind": "const",
-                    "value": "1"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "name": "field_2",
-            "type": {
-              "defined": {
-                "name": "MXEEncryptedStruct",
-                "generics": [
-                  {
-                    "kind": "const",
-                    "value": "8"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "name": "field_3",
-            "type": {
-              "defined": {
-                "name": "SharedEncryptedStruct",
-                "generics": [
-                  {
-                    "kind": "const",
-                    "value": "1"
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "SharedEncryptedStruct",
       "generics": [
         {
@@ -5190,6 +6433,29 @@
       }
     },
     {
+      "name": "Shielded",
+      "docs": [
+        "Public tokens moved into the vault; the owner's private balance is credited by Arcium."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "SignedComputationOutputs",
       "generics": [
         {
@@ -5224,104 +6490,6 @@
                 "generic": "O"
               }
             ]
-          }
-        ]
-      }
-    },
-    {
-      "name": "SwapOutput",
-      "docs": [
-        "The output of the callback instruction. Provided as a struct with ordered fields",
-        "as anchor does not support tuples and tuple structs yet."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "field_0",
-            "type": {
-              "defined": {
-                "name": "SwapOutputStruct0"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "SwapOutputStruct0",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "field_0",
-            "type": {
-              "defined": {
-                "name": "SharedEncryptedStruct",
-                "generics": [
-                  {
-                    "kind": "const",
-                    "value": "1"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "name": "field_1",
-            "type": {
-              "defined": {
-                "name": "SharedEncryptedStruct",
-                "generics": [
-                  {
-                    "kind": "const",
-                    "value": "1"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "name": "field_2",
-            "type": {
-              "defined": {
-                "name": "MXEEncryptedStruct",
-                "generics": [
-                  {
-                    "kind": "const",
-                    "value": "2"
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "name": "field_3",
-            "type": {
-              "defined": {
-                "name": "SwapOutputStruct03"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "SwapOutputStruct03",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "field_0",
-            "type": "bool"
-          },
-          {
-            "name": "field_1",
-            "type": "f64"
-          },
-          {
-            "name": "field_2",
-            "type": "u8"
           }
         ]
       }
@@ -5363,8 +6531,9 @@
       "docs": [
         "Public facts about an exchange token. PDA(\"token\", mint).",
         "",
-        "The real SPL mint starts with supply 0. Tokens live inside encrypted token",
-        "accounts, and `exchange_supply` is their public total."
+        "Exchange-created mints start with SPL supply 0. Tokens live inside encrypted",
+        "token accounts, and `exchange_supply` is their public total. Public tokens can",
+        "come back in via the vault (`shield`)."
       ],
       "type": {
         "kind": "struct",
@@ -5380,14 +6549,16 @@
           {
             "name": "exchange_supply",
             "docs": [
-              "Sum of all private ETA balances of this token (public)."
+              "Tokens inside the exchange (public number): all private balances, plus",
+              "shield deposits whose credit is still on its way."
             ],
             "type": "u64"
           },
           {
             "name": "max_supply",
             "docs": [
-              "Cap on `exchange_supply`. `u64::MAX` for fake USDC."
+              "Cap on the circulating supply (see `circulating`). `u64::MAX` for fake",
+              "USDC, 0 for outside tokens (never minted here)."
             ],
             "type": "u64"
           },
@@ -5404,11 +6575,25 @@
             "type": "u8"
           },
           {
+            "name": "is_external",
+            "docs": [
+              "A mint this program did not create: it is never minted, only held in the vault."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "vault_amount",
+            "docs": [
+              "Public tokens deposited into this program's vault by `shield`."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                64
+                55
               ]
             }
           }
@@ -5627,6 +6812,11 @@
       "value": "[108, 112, 95, 109, 105, 110, 116]"
     },
     {
+      "name": "LP_POSITION_SEED",
+      "type": "bytes",
+      "value": "[108, 112, 95, 102, 101, 101, 115]"
+    },
+    {
       "name": "MAX_FEE_BPS",
       "type": "u16",
       "value": "1000"
@@ -5661,6 +6851,30 @@
       "value": "10"
     },
     {
+      "name": "ORDER_LIMIT",
+      "docs": [
+        "Order types (must match the circuits)."
+      ],
+      "type": "u8",
+      "value": "0"
+    },
+    {
+      "name": "ORDER_MARKET",
+      "docs": [
+        "Fills now at the best prices up to its limit; the rest is returned."
+      ],
+      "type": "u8",
+      "value": "1"
+    },
+    {
+      "name": "ORDER_POST_ONLY",
+      "docs": [
+        "Only waits in the book; refused if it would trade immediately."
+      ],
+      "type": "u8",
+      "value": "2"
+    },
+    {
       "name": "POOL_SEED",
       "type": "bytes",
       "value": "[112, 111, 111, 108]"
@@ -5687,6 +6901,14 @@
       "name": "USER_SEED",
       "type": "bytes",
       "value": "[117, 115, 101, 114]"
+    },
+    {
+      "name": "VAULT_SEED",
+      "docs": [
+        "Token account (one per mint) holding public tokens moved into the exchange."
+      ],
+      "type": "bytes",
+      "value": "[118, 97, 117, 108, 116]"
     }
   ]
 }

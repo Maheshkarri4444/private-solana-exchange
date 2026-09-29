@@ -7,6 +7,7 @@ import { useBalances } from "@/hooks/useBalances";
 import { usePools } from "@/hooks/usePools";
 import { usePrivateAccount } from "@/hooks/usePrivateAccount";
 import { type PoolStep, createPool } from "@/lib/actions";
+import { publicSupply } from "@/lib/api";
 import { INITIAL_LP_SUPPLY } from "@/lib/config";
 import { formatAmount, formatPrice, formatUsd, parseAmount, toNumber } from "@/lib/format";
 import { explainError } from "@/lib/errors";
@@ -53,7 +54,7 @@ export function CreatePoolForm() {
   const selectedMint = selected?.mint ?? "";
   // Public total supply = private (exchange) + SPL, for the preview.
   const totalSupply = selected
-    ? BigInt(selected.exchangeSupply ?? "0") + BigInt(selected.splSupply ?? "0")
+    ? BigInt(selected.exchangeSupply ?? "0") + publicSupply(selected)
     : null;
 
   if (tokens.length > 0 && candidates.length === 0 && !created) {

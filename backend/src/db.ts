@@ -17,8 +17,14 @@ export interface TokenDoc {
   exchangeSupply?: string;
   /** Real SPL supply: tokens moved out to public wallets. */
   splSupply?: string;
+  /** Public tokens held in the program's vault (moved in from wallets with `shield`). */
+  vaultAmount?: string;
   /** Slot the supplies were read at (older snapshots never overwrite newer ones). */
   supplySlot?: number;
+  /** An SPL token this exchange didn't create: never minted here, only held in the vault. */
+  isExternal?: boolean;
+  /** Exchange-made tokens always have 6; outside tokens can have any. */
+  decimals?: number;
 }
 
 /**
@@ -38,6 +44,8 @@ export interface EtaDoc {
   unshieldSaltCt: string; // base64, 32 bytes
   unshieldSaltNonce: string;
   unshieldAmount: string;
+  /** Tokens already in the vault whose private credit hasn't landed yet (a failed MPC job). */
+  shieldOwed: string;
   slot: number;
 }
 
@@ -54,6 +62,8 @@ export interface PoolDoc {
   createdAt: number;
   lastTradeAt: number;
   busy: boolean;
+  /** Swap fees are being tracked for LP holders (false until the first trade after the upgrade). */
+  feesOn: boolean;
   slot: number;
 }
 
@@ -72,6 +82,29 @@ export interface BookDoc {
   createdAt: number;
   lastActivityAt: number;
   busy: boolean;
+  /** Slots that traded and wait for the settler (one bit per slot). */
+  settleMask: number;
+  /** Last trade price, micro-USDC per token (public). */
+  lastPrice: string;
+  lastTradeAt: number;
+  trades: number;
+  slot: number;
+}
+
+/**
+ * One LP holder's share of a pool's swap fees. Public: how many trades are paid
+ * out. The lifetime total is a ciphertext only the holder can open.
+ */
+export interface LpPositionDoc {
+  address: string;
+  pool: string;
+  owner: string;
+  earnedCt: string; // base64, 32 bytes
+  earnedNonce: string;
+  earnedInitialized: boolean;
+  paidSwapCount: number;
+  paidAt: number;
+  pending: boolean;
   slot: number;
 }
 
@@ -81,6 +114,13 @@ export interface BookViewsDoc {
   book: string;
   views: { ciphertexts: string[]; nonce: string }[]; // base64
   slot: number;
+}
+
+/** Every public trade price of an order book. */
+export interface BookPriceDoc {
+  book: string;
+  time: number;
+  price: string;
 }
 
 /** Every public price a pool has had (the on-chain ring buffer keeps only 32). */
@@ -107,6 +147,9 @@ export async function connectDb(): Promise<void> {
   await books().createIndex({ tokenMint: 1 }, { unique: true });
   await bookViews().createIndex({ address: 1 }, { unique: true });
   await bookViews().createIndex({ book: 1 }, { unique: true });
+  await bookPrices().createIndex({ book: 1, time: 1, price: 1 }, { unique: true });
+  await lpPositions().createIndex({ address: 1 }, { unique: true });
+  await lpPositions().createIndex({ owner: 1 });
 }
 
 function collection<T extends object>(name: string): Collection<T> {
@@ -120,3 +163,5 @@ export const pools = () => collection<PoolDoc>("pools");
 export const prices = () => collection<PricePointDoc>("pool_prices");
 export const books = () => collection<BookDoc>("books");
 export const bookViews = () => collection<BookViewsDoc>("book_views");
+export const bookPrices = () => collection<BookPriceDoc>("book_prices");
+export const lpPositions = () => collection<LpPositionDoc>("lp_positions");

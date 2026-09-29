@@ -90,10 +90,10 @@ pub fn init_seed_pool_comp_def_handler(
     Ok(())
 }
 
-/// Registers the `swap` circuit. Same rules as `credit_balance`.
-#[init_computation_definition_accounts("swap", payer)]
+/// Registers the `pool_swap` circuit (swap + LP fee growth). Same rules as `credit_balance`.
+#[init_computation_definition_accounts("pool_swap", payer)]
 #[derive(Accounts)]
-pub struct InitSwapCompDef<'info> {
+pub struct InitPoolSwapCompDef<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(
@@ -117,14 +117,56 @@ pub struct InitSwapCompDef<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn init_swap_comp_def_handler(
-    ctx: Context<InitSwapCompDef>,
+pub fn init_pool_swap_comp_def_handler(
+    ctx: Context<InitPoolSwapCompDef>,
     circuit_url: Option<String>,
 ) -> Result<()> {
     let source = circuit_url.map(|source| {
         CircuitSource::OffChain(OffChainCircuitSource {
             source,
-            hash: circuit_hash!("swap"),
+            hash: circuit_hash!("pool_swap"),
+        })
+    });
+    init_computation_def(ctx.accounts, source)?;
+    Ok(())
+}
+
+/// Registers the `commit_balance` circuit. Same rules as `credit_balance`.
+/// Registers the `lp_collect` circuit (pays swap fees to an LP holder). Same rules as `credit_balance`.
+#[init_computation_definition_accounts("lp_collect", payer)]
+#[derive(Accounts)]
+pub struct InitLpCollectCompDef<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        seeds = [CONFIG_SEED],
+        bump = config.bump,
+        constraint = config.admin == payer.key() @ ErrorCode::NotAdmin,
+    )]
+    pub config: Box<Account<'info, Config>>,
+    #[account(mut, address = derive_mxe_pda!())]
+    pub mxe_account: Box<Account<'info, MXEAccount>>,
+    #[account(mut)]
+    /// CHECK: comp_def_account, checked by the arcium program (not initialized yet).
+    pub comp_def_account: UncheckedAccount<'info>,
+    #[account(mut, address = derive_mxe_lut_pda!(mxe_account.lut_offset_slot))]
+    /// CHECK: address_lookup_table, checked by the arcium program.
+    pub address_lookup_table: UncheckedAccount<'info>,
+    #[account(address = LUT_PROGRAM_ID)]
+    /// CHECK: the Address Lookup Table program.
+    pub lut_program: UncheckedAccount<'info>,
+    pub arcium_program: Program<'info, Arcium>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn init_lp_collect_comp_def_handler(
+    ctx: Context<InitLpCollectCompDef>,
+    circuit_url: Option<String>,
+) -> Result<()> {
+    let source = circuit_url.map(|source| {
+        CircuitSource::OffChain(OffChainCircuitSource {
+            source,
+            hash: circuit_hash!("lp_collect"),
         })
     });
     init_computation_def(ctx.accounts, source)?;
@@ -213,10 +255,10 @@ pub fn init_debit_balance_comp_def_handler(
     Ok(())
 }
 
-/// Registers the `place_order` circuit. Same rules as `credit_balance`.
-#[init_computation_definition_accounts("place_order", payer)]
+/// Registers the `book_place` circuit. Same rules as `credit_balance`.
+#[init_computation_definition_accounts("book_place", payer)]
 #[derive(Accounts)]
-pub struct InitPlaceOrderCompDef<'info> {
+pub struct InitBookPlaceCompDef<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(
@@ -240,24 +282,24 @@ pub struct InitPlaceOrderCompDef<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn init_place_order_comp_def_handler(
-    ctx: Context<InitPlaceOrderCompDef>,
+pub fn init_book_place_comp_def_handler(
+    ctx: Context<InitBookPlaceCompDef>,
     circuit_url: Option<String>,
 ) -> Result<()> {
     let source = circuit_url.map(|source| {
         CircuitSource::OffChain(OffChainCircuitSource {
             source,
-            hash: circuit_hash!("place_order"),
+            hash: circuit_hash!("book_place"),
         })
     });
     init_computation_def(ctx.accounts, source)?;
     Ok(())
 }
 
-/// Registers the `settle_order` circuit. Same rules as `credit_balance`.
-#[init_computation_definition_accounts("settle_order", payer)]
+/// Registers the `book_settle` circuit. Same rules as `credit_balance`.
+#[init_computation_definition_accounts("book_settle", payer)]
 #[derive(Accounts)]
-pub struct InitSettleOrderCompDef<'info> {
+pub struct InitBookSettleCompDef<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(
@@ -281,14 +323,14 @@ pub struct InitSettleOrderCompDef<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn init_settle_order_comp_def_handler(
-    ctx: Context<InitSettleOrderCompDef>,
+pub fn init_book_settle_comp_def_handler(
+    ctx: Context<InitBookSettleCompDef>,
     circuit_url: Option<String>,
 ) -> Result<()> {
     let source = circuit_url.map(|source| {
         CircuitSource::OffChain(OffChainCircuitSource {
             source,
-            hash: circuit_hash!("settle_order"),
+            hash: circuit_hash!("book_settle"),
         })
     });
     init_computation_def(ctx.accounts, source)?;

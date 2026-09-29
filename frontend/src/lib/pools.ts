@@ -22,6 +22,8 @@ export interface PoolView {
   history: { price: number; time: number }[];
   /** An Arcium job is running on the pool right now. */
   busy: boolean;
+  /** Swap fees are being paid out to LP holders. */
+  feesOn: boolean;
   token: TokenMeta | null;
   privateSupply: bigint;
   splSupply: bigint;
@@ -31,7 +33,7 @@ export interface PoolView {
 
 function toView(p: PoolRecord): PoolView {
   const privateSupply = BigInt(p.privateSupply);
-  const splSupply = BigInt(p.splSupply);
+  const splSupply = BigInt(p.splSupply); // public wallets only (the vault's tokens count as private)
   return {
     address: p.address,
     tokenMint: p.tokenMint,
@@ -47,6 +49,7 @@ function toView(p: PoolRecord): PoolView {
     lastTradeAt: p.lastTradeAt,
     history: p.history.map((h) => ({ price: Number(h.price) / PRICE_SCALE, time: h.time })),
     busy: p.busy,
+    feesOn: p.feesOn ?? false,
     token: p.token,
     privateSupply,
     splSupply,

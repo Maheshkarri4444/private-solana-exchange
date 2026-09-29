@@ -12,6 +12,10 @@ export const MAX_ORDERS_PER_USER = 3;
 /** Orders trade whole tokens; prices are USDC base units (micro-USDC) per whole token. */
 export const LOT = 10n ** BigInt(TOKEN_DECIMALS);
 
+/** Order types (the program's ORDER_*). */
+export const ORDER = { LIMIT: 0, MARKET: 1, POST_ONLY: 2 } as const;
+export type OrderKind = (typeof ORDER)[keyof typeof ORDER];
+
 const u = (width: number) => ({ Integer: { signed: false, width } }) as const;
 
 type ViewFields = {
@@ -19,6 +23,7 @@ type ViewFields = {
   price: bigint;
   lots: bigint;
   remaining: bigint;
+  quote: bigint;
 };
 
 /** An owner's copy of their order: the circuit's `OrderView`, packed into 1 ciphertext. */
@@ -28,6 +33,7 @@ const viewPacker = createPacker<ViewFields, ViewFields>(
     { name: "price", type: u(64) },
     { name: "lots", type: u(32) },
     { name: "remaining", type: u(32) },
+    { name: "quote", type: u(64) },
   ] as const,
   "OrderView",
 );
@@ -41,11 +47,31 @@ export interface MyOrder {
   price: bigint;
   /** Whole tokens. */
   lots: bigint;
-  /** As of your last action on this order: fills by others show up after you collect. */
+  /** Unfilled part, as of the order's last settlement. */
   remaining: bigint;
+  /** USDC paid or received by the fills of its last placement / settlement. */
+  quote: bigint;
+  /** Traded just now; the backend is moving the fills into the owner's balances. */
+  settling: boolean;
 }
 
-/** Your orders in a book. Each is your own encrypted copy, updated when you act on it. */
+/** Decrypted owner's copy (its packed values) → fields. */
+export const unpackView = (values: bigint[]) => viewPacker.unpack(values);
+
+/** Decrypts the owner's copy stored for `slot` (only its owner's key opens it). */
+export function readView(book: BookRecord, slot: number, keys: PrivateKeys, mxePublicKey: Uint8Array) {
+  const view = book.views[slot];
+  if (!view) return null;
+  const values = decryptValues(
+    keys.privateKey,
+    mxePublicKey,
+    view.ciphertexts.map((c) => Array.from(Buffer.from(c, "base64"))),
+    new BN(view.nonce),
+  );
+  return unpackView(values);
+}
+
+/** Your open orders in a book, decrypted in this browser. */
 export function myOrders(
   book: BookRecord,
   owner: string,
@@ -53,15 +79,9 @@ export function myOrders(
   mxePublicKey: Uint8Array,
 ): MyOrder[] {
   return book.slots.flatMap((s, slot) => {
-    const view = book.views[slot];
-    if (s.owner !== owner || !view) return [];
-    const values = decryptValues(
-      keys.privateKey,
-      mxePublicKey,
-      view.ciphertexts.map((c) => Array.from(Buffer.from(c, "base64"))),
-      new BN(view.nonce),
-    );
-    const o = viewPacker.unpack(values);
+    if (s.owner !== owner) return [];
+    const o = readView(book, slot, keys, mxePublicKey);
+    if (!o) return [];
     return [
       {
         slot,
@@ -70,9 +90,21 @@ export function myOrders(
         price: o.price,
         lots: o.lots,
         remaining: o.remaining,
+        quote: o.quote,
+        settling: (book.settleMask & (1 << slot)) !== 0,
       },
     ];
   });
+}
+
+/** Micro-USDC per token → USDC per token. */
+export const toUsdc = (micro: bigint | string) => Number(micro) / 1e6;
+
+/** Public reference price (USDC per token): the last trade, else the pool's price. */
+export function referencePrice(book: BookRecord): number | null {
+  if (book.lastPrice !== "0") return toUsdc(book.lastPrice);
+  if (book.poolPrice) return Number(book.poolPrice) / 1e12;
+  return null;
 }
 
 export const openOrders = (book: BookRecord) => book.slots.filter((s) => s.owner).length;

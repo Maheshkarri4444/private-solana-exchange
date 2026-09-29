@@ -6,11 +6,13 @@ import { AccountGate } from "@/components/AccountGate";
 import { BookSlots } from "@/components/BookSlots";
 import { MyOrders } from "@/components/MyOrders";
 import { OrderForm } from "@/components/OrderForm";
+import { PriceChart } from "@/components/PriceChart";
 import { Card, PrivateBadge, Spinner, TokenIcon } from "@/components/ui";
 import { useBook } from "@/hooks/useBooks";
 import { usePrivateAccount } from "@/hooks/usePrivateAccount";
+import { toUsdc } from "@/lib/books";
 import { explorerUrl } from "@/lib/config";
-import { formatPrice, shortAddress } from "@/lib/format";
+import { formatPct, formatPrice, shortAddress } from "@/lib/format";
 
 export default function BookPage() {
   const { mint } = useParams<{ mint: string }>();
@@ -44,6 +46,9 @@ export default function BookPage() {
   }
 
   const token = book.token;
+  const history = book.history.map((h) => ({ price: toUsdc(h.price), time: h.time }));
+  const last = book.lastPrice !== "0" ? toUsdc(book.lastPrice) : null;
+  const change = history.length > 1 ? (history[history.length - 1].price / history[0].price - 1) * 100 : null;
   return (
     <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
       <div className="space-y-6">
@@ -59,14 +64,35 @@ export default function BookPage() {
             </p>
           </div>
           <div className="text-right">
-            <PrivateBadge>prices hidden</PrivateBadge>
+            {last ? (
+              <>
+                <p className="font-mono text-2xl font-semibold">{formatPrice(last)} USDC</p>
+                <p className="text-sm text-muted">
+                  last trade
+                  {change !== null && (
+                    <span className={`ml-1 font-semibold ${change >= 0 ? "text-accent" : "text-danger"}`}>
+                      {formatPct(change)}
+                    </span>
+                  )}
+                </p>
+              </>
+            ) : (
+              <PrivateBadge>no trades yet</PrivateBadge>
+            )}
             {book.poolPrice && (
-              <p className="mt-1 text-sm text-muted">
+              <p className="mt-1 text-xs text-muted">
                 Pool price <span className="font-mono text-fg">{formatPrice(Number(book.poolPrice) / 1e12)} USDC</span>
               </p>
             )}
           </div>
         </div>
+
+        <Card
+          title="Trades"
+          subtitle={`${book.trades.toLocaleString("en-US")} so far. Each trade's price is public; sizes and sides never are.`}
+        >
+          <PriceChart points={history} height={200} />
+        </Card>
 
         <BookSlots book={book} me={me} />
 
@@ -74,23 +100,24 @@ export default function BookPage() {
           <ol className="list-decimal space-y-2 pl-4 text-sm leading-relaxed text-muted">
             <li>Your order (buy or sell, price, size) is encrypted in this browser.</li>
             <li>
-              Arcium locks the funds from your private balance and matches it against the book: best price first,
-              then oldest. Trades happen at the resting order&apos;s price.
+              Arcium locks the funds from your private balance and matches it: best price first, then oldest.
+              Trades happen at the waiting order&apos;s price.
             </li>
-            <li>Whatever fills right away lands in your private balance. The rest waits in the book.</li>
+            <li>What fills right away lands in your private balance at once. A limit order&apos;s rest waits in the book.</li>
             <li>
-              When others fill your resting order, press <span className="text-fg">Collect</span>. Cancel returns
-              anything still locked.
+              When someone trades with your waiting order, it settles into your balance by itself and you get a
+              notification. A filled order leaves the book on its own.
             </li>
           </ol>
           <p className="mt-4 text-xs text-muted">
-            Orders trade in whole tokens. A book holds up to 8 orders, 3 per wallet.
+            Public: that an order exists, whose it is, which orders traded, and each trade&apos;s price. Private: every
+            order&apos;s side, price and size. Orders trade in whole tokens; a book holds up to 8 waiting orders, 3 per wallet.
           </p>
         </Card>
       </div>
 
       <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
-        <Card title="Place a limit order" subtitle="Side, price and size are encrypted: only Arcium sees them.">
+        <Card title="Place an order" subtitle="Side, price and size are encrypted: only Arcium sees them.">
           <AccountGate inline>
             <OrderForm book={book} onPlaced={refreshSoon} />
           </AccountGate>

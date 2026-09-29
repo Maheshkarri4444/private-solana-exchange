@@ -4,9 +4,8 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { usePrivateAccount } from "@/hooks/usePrivateAccount";
 import { shortAddress } from "@/lib/format";
-import { Badge, Button } from "./ui";
+import { Button } from "./ui";
 
 /** A colored circle unique to each wallet address. */
 export function Avatar({ address, size = 32 }: { address: string; size?: number }) {
@@ -23,10 +22,21 @@ export function Avatar({ address, size = 32 }: { address: string; size?: number 
   );
 }
 
+const ITEM = "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-white/5";
+
+function MenuLink({ href, icon, children, onClick }: { href: string; icon: string; children: ReactNode; onClick: () => void }) {
+  return (
+    <Link href={href} className={ITEM} onClick={onClick}>
+      <span className="w-5 text-center">{icon}</span>
+      <span className="flex-1">{children}</span>
+    </Link>
+  );
+}
+
 export function ProfileMenu() {
   const { connected, publicKey, disconnect } = useWallet();
   const { setVisible } = useWalletModal();
-  const { keys, lock } = usePrivateAccount();
+
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -47,16 +57,6 @@ export function ProfileMenu() {
   }
 
   const address = publicKey.toBase58();
-  const item = "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-white/5";
-
-  const Item = ({ href, icon, children, soon }: { href: string; icon: string; children: ReactNode; soon?: boolean }) => (
-    <Link href={href} className={item} onClick={() => setOpen(false)}>
-      <span className="w-5 text-center">{icon}</span>
-      <span className="flex-1">{children}</span>
-      {soon && <Badge className="bg-white/10 text-muted">soon</Badge>}
-    </Link>
-  );
-
   return (
     <div ref={ref} className="relative">
       <button
@@ -73,22 +73,17 @@ export function ProfileMenu() {
           <p className="px-3 pt-2 pb-3 text-xs text-muted">
             Wallet <span className="font-mono text-fg">{shortAddress(address)}</span>
           </p>
-          <Item href="/create/token" icon="🪙">
+          <MenuLink href="/create/token" icon="🪙" onClick={() => setOpen(false)}>
             Create token
-          </Item>
-          <Item href="/create/pool" icon="💧">
+          </MenuLink>
+          <MenuLink href="/create/pool" icon="💧" onClick={() => setOpen(false)}>
             Create liquidity pool
-          </Item>
-          <Item href="/create/orderbook" icon="📖">
+          </MenuLink>
+          <MenuLink href="/create/orderbook" icon="📖" onClick={() => setOpen(false)}>
             Create order book
-          </Item>
+          </MenuLink>
           <hr className="my-2 border-line" />
-          {keys && (
-            <button className={item} onClick={() => { lock(); setOpen(false); }}>
-              <span className="w-5 text-center">🔒</span>Lock private balances
-            </button>
-          )}
-          <button className={`${item} text-danger`} onClick={() => { disconnect(); setOpen(false); }}>
+          <button className={`${ITEM} text-danger`} onClick={() => { disconnect(); setOpen(false); }}>
             <span className="w-5 text-center">⏻</span>Disconnect
           </button>
         </div>

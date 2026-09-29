@@ -3,6 +3,12 @@ import { type PoolDoc, type TokenDoc, pools, prices, tokens } from "../db.js";
 
 export const poolsRouter = Router();
 
+/** SPL supply minus the vault: the vault's tokens are already counted as private. */
+function inPublicWallets(token: TokenDoc | null): string {
+  const outside = BigInt(token?.splSupply ?? "0") - BigInt(token?.vaultAmount ?? "0");
+  return (outside > 0n ? outside : 0n).toString();
+}
+
 /** Pools with their token metadata, supplies and price history, newest first. */
 async function withDetails(docs: PoolDoc[], historyLimit: number) {
   const mints = docs.flatMap((p) => [p.tokenMint, p.lpMint]);
@@ -25,7 +31,7 @@ async function withDetails(docs: PoolDoc[], historyLimit: number) {
       ...pool,
       token,
       privateSupply: token?.exchangeSupply ?? "0",
-      splSupply: token?.splSupply ?? "0",
+      splSupply: inPublicWallets(token),
       lpSupply: byMint.get(pool.lpMint)?.exchangeSupply ?? "0",
       history: historyByPool.get(pool.address) ?? [],
     };

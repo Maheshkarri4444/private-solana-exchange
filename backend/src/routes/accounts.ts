@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import { Router } from "express";
-import { etas, tokens } from "../db.js";
+import { etas, lpPositions, tokens } from "../db.js";
 import { syncAccounts } from "../indexer.js";
 
 export const accountsRouter = Router();
@@ -32,6 +32,21 @@ accountsRouter.get("/etas", async (req, res) => {
     .toArray();
   const byMint = new Map(tokenDocs.map((t) => [t.mint, t]));
   res.json(docs.map((d) => ({ ...d, token: byMint.get(d.mint) ?? null })));
+});
+
+/**
+ * GET /api/lp-positions?owner=<wallet>
+ * The wallet's share of pool swap fees. The lifetime total is a ciphertext
+ * only the owner's browser can open.
+ */
+accountsRouter.get("/lp-positions", async (req, res) => {
+  const owner = toPublicKey(req.query.owner);
+  if (!owner) {
+    res.status(400).json({ error: "valid owner address required" });
+    return;
+  }
+  const docs = await lpPositions().find({ owner: owner.toBase58() }, { projection: { _id: 0, slot: 0 } }).toArray();
+  res.json(docs);
 });
 
 /**

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePools } from "@/hooks/usePools";
 import { usePrivateAccount } from "@/hooks/usePrivateAccount";
-import type { TokenMeta } from "@/lib/api";
+import { type TokenMeta, publicSupply } from "@/lib/api";
 import { explorerUrl } from "@/lib/config";
 import { formatAmount, shortAddress } from "@/lib/format";
 import { Card, TokenIcon } from "./ui";
@@ -35,7 +35,7 @@ export function CreatedTokens({ tokens }: { tokens: TokenMeta[] }) {
         <ul className="divide-y divide-line">
           {mine.map((token) => {
             const privateSupply = BigInt(token.exchangeSupply ?? "0");
-            const splSupply = BigInt(token.splSupply ?? "0");
+            const splSupply = publicSupply(token);
             return (
               <li key={token.mint} className="py-4">
                 <div className="flex items-center gap-3">
@@ -51,7 +51,7 @@ export function CreatedTokens({ tokens }: { tokens: TokenMeta[] }) {
                 <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-bg/60 p-3 text-sm">
                   <Supply label="Total supply" value={privateSupply + splSupply} />
                   <Supply label="Private supply" value={privateSupply} hint="inside the exchange" />
-                  <Supply label="SPL supply" value={splSupply} hint="in public wallets" />
+                  <Supply label="Public supply" value={splSupply} hint="SPL tokens in wallets" />
                 </div>
               </li>
             );

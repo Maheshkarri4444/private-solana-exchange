@@ -4,8 +4,9 @@
 //!    SHA3-256(balance ‖ salt), and gives the owner the salt (encrypted).
 //!    The account is frozen from here until step 3 finishes.
 //! 2. `unshield` — the owner proves in ZK "my fingerprinted balance ≥ amount"
-//!    without revealing it. The program checks the proof and mints `amount`
-//!    real SPL tokens to the owner's wallet.
+//!    without revealing it. The program checks the proof and sends `amount`
+//!    real SPL tokens to the owner's wallet: from its vault first, minting
+//!    only the rest (and only for mints it created).
 //! 3. `finish_unshield` — Arcium subtracts `amount` from the encrypted balance
 //!    and unfreezes the account. Sent in the same transaction as step 2, and
 //!    callable again if the MPC job fails.
@@ -13,7 +14,7 @@
 //! `cancel_unshield` unfreezes an account that never got to step 2.
 
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{self, Mint, MintTo, Token2022, TokenAccount};
+use anchor_spl::token_interface::{self, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked};
 use arcium_anchor::prelude::*;
 use arcium_client::idl::arcium::types::CallbackAccount;
 
@@ -37,6 +38,13 @@ pub struct PrepareUnshield<'info> {
 
     #[account(mut, constraint = eta.owner == payer.key() @ ErrorCode::WrongAccount)]
     pub eta: Box<Account<'info, EncryptedTokenAccount>>,
+
+    #[account(seeds = [TOKEN_SEED, eta.mint.as_ref()], bump = token_info.bump)]
+    pub token_info: Box<Account<'info, TokenInfo>>,
+    /// CHECK: the token's creator. A pool (an account of this program) means an
+    /// LP token, which stays private: its fees are paid to LP positions.
+    #[account(address = token_info.creator)]
+    pub token_creator: UncheckedAccount<'info>,
 
     #[account(
         init_if_needed,
@@ -73,8 +81,12 @@ pub struct PrepareUnshield<'info> {
 pub fn prepare_unshield_handler(ctx: Context<PrepareUnshield>, computation_offset: u64) -> Result<()> {
     let slot = Clock::get()?.slot;
     let computation = ctx.accounts.computation_account.key();
-    let eta = &mut ctx.accounts.eta;
 
+    require!(
+        *ctx.accounts.token_creator.owner != ID,
+        ErrorCode::LpTokensStayPrivate
+    );
+    let eta = &mut ctx.accounts.eta;
     require!(eta.is_initialized, ErrorCode::NoBalance);
     require!(!eta.is_frozen(), ErrorCode::AccountFrozen);
     require!(!eta.is_locked(slot), ErrorCode::AccountBusy);
@@ -186,7 +198,7 @@ pub struct Unshield<'info> {
     #[account(mut, constraint = token_info.mint == eta.mint @ ErrorCode::WrongAccount)]
     pub token_info: Box<Account<'info, TokenInfo>>,
 
-    #[account(mut, address = eta.mint)]
+    #[account(mut, address = eta.mint, mint::token_program = token_program)]
     pub mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// Any token account of the owner for this mint (clients use the ATA).
@@ -198,14 +210,18 @@ pub struct Unshield<'info> {
     )]
     pub destination: Box<InterfaceAccount<'info, TokenAccount>>,
 
+    /// CHECK: the program's vault for this mint; may not exist (then it holds nothing).
+    #[account(mut, seeds = [VAULT_SEED, eta.mint.as_ref()], bump)]
+    pub vault: UncheckedAccount<'info>,
+
     #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Box<Account<'info, Config>>,
 
-    /// CHECK: data-less PDA that signs as mint authority for every exchange mint.
+    /// CHECK: data-less PDA that signs mints and owns every vault.
     #[account(seeds = [MINT_AUTHORITY_SEED], bump = config.mint_authority_bump)]
     pub mint_authority: UncheckedAccount<'info>,
 
-    pub token_program: Program<'info, Token2022>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 pub fn unshield_handler(ctx: Context<Unshield>, amount: u64, proof: Groth16Proof) -> Result<()> {
@@ -219,21 +235,54 @@ pub fn unshield_handler(ctx: Context<Unshield>, amount: u64, proof: Groth16Proof
     // The proof is bound to this account's fingerprint and to `amount`.
     verify_unshield(&proof, &unshield_inputs(&a.eta.unshield_commitment, amount))?;
 
-    let signer_seeds: &[&[&[u8]]] = &[&[MINT_AUTHORITY_SEED, &[a.config.mint_authority_bump]]];
-    token_interface::mint_to(
-        CpiContext::new_with_signer(
-            a.token_program.key(),
-            MintTo {
-                mint: a.mint.to_account_info(),
-                to: a.destination.to_account_info(),
-                authority: a.mint_authority.to_account_info(),
-            },
-            signer_seeds,
-        ),
-        amount,
-    )?;
+    // Pay from the vault first (public tokens moved in earlier); mint only
+    // what it lacks, and only for mints this program created.
+    let in_vault = {
+        let data = a.vault.try_borrow_data()?;
+        if *a.vault.owner == a.token_program.key() && data.len() >= 72 {
+            u64::from_le_bytes(data[64..72].try_into().unwrap())
+        } else {
+            0
+        }
+    };
+    let from_vault = amount.min(in_vault);
+    let to_mint = amount - from_vault;
+    require!(to_mint == 0 || !a.token_info.is_external, ErrorCode::NotEnoughInVault);
 
-    // Private supply goes down by exactly what the SPL supply went up.
+    let signer_seeds: &[&[&[u8]]] = &[&[MINT_AUTHORITY_SEED, &[a.config.mint_authority_bump]]];
+    if from_vault > 0 {
+        token_interface::transfer_checked(
+            CpiContext::new_with_signer(
+                a.token_program.key(),
+                TransferChecked {
+                    from: a.vault.to_account_info(),
+                    mint: a.mint.to_account_info(),
+                    to: a.destination.to_account_info(),
+                    authority: a.mint_authority.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            from_vault,
+            a.mint.decimals,
+        )?;
+        a.token_info.vault_amount = a.token_info.vault_amount.saturating_sub(from_vault);
+    }
+    if to_mint > 0 {
+        token_interface::mint_to(
+            CpiContext::new_with_signer(
+                a.token_program.key(),
+                MintTo {
+                    mint: a.mint.to_account_info(),
+                    to: a.destination.to_account_info(),
+                    authority: a.mint_authority.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            to_mint,
+        )?;
+    }
+
+    // The tokens left the exchange: its private supply goes down by `amount`.
     a.token_info.exchange_supply = a
         .token_info
         .exchange_supply

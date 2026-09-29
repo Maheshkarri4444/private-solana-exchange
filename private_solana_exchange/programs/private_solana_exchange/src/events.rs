@@ -79,12 +79,17 @@ pub struct UnshieldDebited {
     pub ok: bool,
 }
 
-/// An order joined the book. Its side, price and size stay encrypted.
+/// A new order was matched. Public: whether it now waits in the book, which
+/// resting orders it traded with (one bit per slot) and its last trade price
+/// (0 = no trade). Never its side or size.
 #[event]
 pub struct OrderPlaced {
     pub book: Pubkey,
     pub owner: Pubkey,
     pub slot: u8,
+    pub rests: bool,
+    pub traded: u8,
+    pub price: u64,
 }
 
 /// An order was refused (not enough balance, or a zero price / size).
@@ -94,11 +99,28 @@ pub struct OrderRejected {
     pub owner: Pubkey,
 }
 
-/// An owner collected their fills, or cancelled (`cancelled`) and got the rest back.
+/// An order's fills were settled into its owner's balances. `done`: it left
+/// the book (fully filled, or `cancelled`).
 #[event]
 pub struct OrderSettled {
     pub book: Pubkey,
     pub owner: Pubkey,
     pub slot: u8,
     pub cancelled: bool,
+    pub done: bool,
+}
+
+/// An LP holder was paid their share of the swap fees (amounts encrypted to them).
+#[event]
+pub struct LpFeesPaid {
+    pub pool: Pubkey,
+    pub owner: Pubkey,
+}
+
+/// Public tokens moved into the vault; the owner's private balance is credited by Arcium.
+#[event]
+pub struct Shielded {
+    pub owner: Pubkey,
+    pub mint: Pubkey,
+    pub amount: u64,
 }

@@ -13,7 +13,7 @@ import { Button, Card, Field, Input, Notice, Spinner } from "./ui";
 const STEPS: { key: UnshieldStep; label: string }[] = [
   { key: "fingerprint", label: "Arcium fingerprints your encrypted balance" },
   { key: "prove", label: "Your browser proves you have enough (zero-knowledge)" },
-  { key: "mint", label: "Solana checks the proof and mints to your wallet" },
+  { key: "mint", label: "Solana checks the proof and sends the tokens to your wallet" },
   { key: "debit", label: "Arcium subtracts it from your private balance" },
 ];
 
@@ -29,9 +29,10 @@ export function MoveToWallet({ balance, onClose }: { balance: PrivateBalance; on
   const [result, setResult] = useState<Result | null>(null);
 
   const symbol = balance.token?.symbol ?? "tokens";
+  const decimals = balance.token?.decimals ?? 6;
   const mint = new PublicKey(balance.mint);
   const state = balance.record.unshieldState;
-  const parsed = parseAmount(amount);
+  const parsed = parseAmount(amount, decimals);
   const tooMuch = !!parsed && parsed > balance.amount;
 
   async function run(action: () => Promise<Result | null>) {
@@ -64,10 +65,10 @@ export function MoveToWallet({ balance, onClose }: { balance: PrivateBalance; on
       );
       setAmount("");
       return r.debited
-        ? { tone: "success", text: `${formatAmount(parsed)} ${symbol} are now in your wallet.`, signature: r.signature }
+        ? { tone: "success", text: `${formatAmount(parsed, 6, decimals)} ${symbol} are now in your wallet.`, signature: r.signature }
         : {
             tone: "error",
-            text: `${formatAmount(parsed)} ${symbol} reached your wallet, but Arcium hasn't updated your private balance yet. Press "Finish" to retry.`,
+            text: `${formatAmount(parsed, 6, decimals)} ${symbol} reached your wallet, but Arcium hasn't updated your private balance yet. Press "Finish" to retry.`,
             signature: r.signature,
           };
     });
@@ -103,7 +104,7 @@ export function MoveToWallet({ balance, onClose }: { balance: PrivateBalance; on
       {state === UNSHIELD.DEBITING && !busy ? (
         <div className="space-y-3">
           <Notice tone="info">
-            {formatAmount(BigInt(balance.record.unshieldAmount))} {symbol} were minted to your wallet, but your
+            {formatAmount(BigInt(balance.record.unshieldAmount), 6, decimals)} {symbol} were sent to your wallet, but your
             private balance hasn&apos;t been reduced yet. It stays locked until this finishes.
           </Notice>
           <Button onClick={finish} className="w-full">
@@ -117,10 +118,10 @@ export function MoveToWallet({ balance, onClose }: { balance: PrivateBalance; on
             hint={
               <button
                 type="button"
-                onClick={() => setAmount(formatAmount(balance.amount, 6).replace(/,/g, ""))}
+                onClick={() => setAmount(formatAmount(balance.amount, decimals, decimals).replace(/,/g, ""))}
                 className="hover:text-accent"
               >
-                Private balance {formatAmount(balance.amount, 6)} {symbol} · Max
+                Private balance {formatAmount(balance.amount, 6, decimals)} {symbol} · Max
               </button>
             }
           >

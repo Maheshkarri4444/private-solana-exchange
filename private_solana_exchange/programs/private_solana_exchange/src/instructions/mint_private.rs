@@ -2,18 +2,20 @@ use anchor_lang::prelude::*;
 use arcium_anchor::prelude::*;
 use arcium_client::idl::arcium::types::CallbackAccount;
 
+use super::shared::mint_supply;
 use crate::{
     constants::*,
     error::ErrorCode,
     events::{BalanceCredited, CreditFailed, MintQueued},
-    state::{EncryptedTokenAccount, TokenInfo, UserAccount},
+    state::{EncryptedTokenAccount, TokenInfo, UserAccount, CREDIT_MINT, CREDIT_SHIELD},
     ArciumSignerAccount, ID, ID_CONST,
 };
 
 /// Mints tokens straight into the caller's encrypted token account (ETA).
 ///
 /// - Fake USDC: anyone, any amount up to `MAX_MINT_PER_CALL`.
-/// - Created tokens: only the creator, up to the token's max supply.
+/// - Created tokens: only the creator, up to the token's max supply (counting
+///   tokens already moved out to public wallets).
 ///
 /// The amount is public (it changes the public supply); the resulting
 /// balance is encrypted by the MPC and written back in the callback.
@@ -29,6 +31,11 @@ pub struct MintPrivate<'info> {
 
     #[account(seeds = [TOKEN_SEED, token_info.mint.as_ref()], bump = token_info.bump)]
     pub token_info: Box<Account<'info, TokenInfo>>,
+
+    /// CHECK: the token's mint; only its supply is read (public tokens count
+    /// toward the max supply too).
+    #[account(address = token_info.mint)]
+    pub token_mint: UncheckedAccount<'info>,
 
     #[account(
         init_if_needed,
@@ -81,8 +88,8 @@ pub fn mint_private_handler(
 
     let token_info = &ctx.accounts.token_info;
     let new_supply = token_info
-        .exchange_supply
-        .checked_add(amount)
+        .circulating(mint_supply(&ctx.accounts.token_mint)?)
+        .and_then(|c| c.checked_add(amount))
         .ok_or(ErrorCode::Overflow)?;
     if !token_info.is_usdc {
         require_keys_eq!(
@@ -110,6 +117,7 @@ pub fn mint_private_handler(
     require!(!eta.is_locked(slot), ErrorCode::AccountBusy);
     eta.lock(computation, slot);
     eta.pending_amount = amount;
+    eta.credit_kind = CREDIT_MINT;
 
     let args = ArgBuilder::new()
         .x25519_pubkey(eta.enc_pubkey)
@@ -187,6 +195,7 @@ pub fn credit_balance_callback_handler(
         return Ok(());
     }
     let amount = eta.pending_amount;
+    let shield = eta.credit_kind == CREDIT_SHIELD;
     eta.clear_pending();
 
     let result = match output.verify_output(
@@ -195,7 +204,8 @@ pub fn credit_balance_callback_handler(
     ) {
         Ok(CreditBalanceOutput { field_0 }) => field_0,
         Err(_) => {
-            // Balance and supply stay untouched; the user can simply retry.
+            // Balance and supply stay untouched; the user can simply retry. A
+            // shield deposit stays in `shield_owed` and is re-sent by the next shield.
             emit!(CreditFailed {
                 owner: eta.owner,
                 mint: eta.mint,
@@ -210,12 +220,16 @@ pub fn credit_balance_callback_handler(
     );
 
     eta.set_balance(result.ciphertexts[0], result.nonce);
-
-    let token_info = &mut ctx.accounts.token_info;
-    token_info.exchange_supply = token_info
-        .exchange_supply
-        .checked_add(amount)
-        .ok_or(ErrorCode::Overflow)?;
+    if shield {
+        // Already counted in the supply when the tokens reached the vault.
+        eta.shield_owed = eta.shield_owed.saturating_sub(amount);
+    } else {
+        let token_info = &mut ctx.accounts.token_info;
+        token_info.exchange_supply = token_info
+            .exchange_supply
+            .checked_add(amount)
+            .ok_or(ErrorCode::Overflow)?;
+    }
 
     emit!(BalanceCredited {
         owner: eta.owner,

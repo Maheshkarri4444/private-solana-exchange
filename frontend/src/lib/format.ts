@@ -2,21 +2,25 @@ import { TOKEN_DECIMALS } from "./config";
 
 const SCALE = 10n ** BigInt(TOKEN_DECIMALS);
 
-/** 1234560000n → "1,234.56" */
-export function formatAmount(base: bigint, maxFractionDigits = 2): string {
-  const whole = base / SCALE;
-  const fraction = (base % SCALE).toString().padStart(TOKEN_DECIMALS, "0");
+/**
+ * 1234560000n → "1,234.56". Exchange tokens have 6 decimals; tokens moved in
+ * from outside can have others.
+ */
+export function formatAmount(base: bigint, maxFractionDigits = 2, decimals = TOKEN_DECIMALS): string {
+  const scale = 10n ** BigInt(decimals);
+  const whole = base / scale;
+  const fraction = (base % scale).toString().padStart(decimals, "0");
   const shown = fraction.slice(0, maxFractionDigits).replace(/0+$/, "");
   return whole.toLocaleString("en-US") + (shown ? `.${shown}` : "");
 }
 
 /** "12.5" → 12500000n. Returns null for invalid or too-precise input. */
-export function parseAmount(input: string): bigint | null {
+export function parseAmount(input: string, decimals = TOKEN_DECIMALS): bigint | null {
   const value = input.trim().replace(/,/g, "");
   if (!/^\d+(\.\d+)?$/.test(value)) return null;
   const [whole, fraction = ""] = value.split(".");
-  if (fraction.length > TOKEN_DECIMALS) return null;
-  return BigInt(whole) * SCALE + BigInt(fraction.padEnd(TOKEN_DECIMALS, "0"));
+  if (fraction.length > decimals) return null;
+  return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(fraction.padEnd(decimals, "0"));
 }
 
 /** Base units → plain number (for display math only). */

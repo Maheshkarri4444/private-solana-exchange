@@ -8,6 +8,9 @@ import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { UnsafeBurnerWalletAdapter } from "@solana/wallet-adapter-unsafe-burner";
 import { type ReactNode, useMemo } from "react";
 import { PrivateAccountProvider } from "@/hooks/usePrivateAccount";
+import { FillNotifier } from "./FillNotifier";
+import { LpFeeNotifier } from "./LpFeeNotifier";
+import { Toaster } from "./Toaster";
 import { RPC_URL } from "@/lib/config";
 
 // Throwaway in-browser wallet for automated testing only. Off unless the env flag is set.
@@ -21,7 +24,13 @@ export function Providers({ children }: { children: ReactNode }) {
     <ConnectionProvider endpoint={RPC_URL}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
-          <PrivateAccountProvider>{children}</PrivateAccountProvider>
+          <PrivateAccountProvider>
+            <Toaster>
+              <FillNotifier />
+              <LpFeeNotifier />
+              {children}
+            </Toaster>
+          </PrivateAccountProvider>
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>

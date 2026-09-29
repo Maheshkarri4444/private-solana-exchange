@@ -24,7 +24,8 @@ Built on **Arcium** (computation on encrypted data) with **Umbra-style encrypted
  │  • users + token accounts   │        │    (Pinata)            │
  │  • faucet, create token     │        │  • account index       │
  │  • AMM pools, order book    │        │    (MongoDB)           │
- │  • ZK withdraw verifier     │        │    ciphertexts only    │
+ │  • ZK withdraw verifier     │        │  • settler: orders +   │
+ │  • vault: public tokens in  │        │    LP fee payouts      │
  └────────┬────────────▲───────┘        └────────────────────────┘
    queue  │            │ callback
    job    ▼            │ (signed result)
@@ -44,17 +45,19 @@ Every private action is the same loop:
 
 ## 2. What is public, what is private
 
-| Public (anyone can see)                | Private (encrypted)                          |
-| -------------------------------------- | -------------------------------------------- |
-| Token list, names, images              | Every user's balance                         |
-| Total supply of each token             | Swap amounts                                 |
-| Faucet / mint amounts                  | Pool reserves                                |
-| Pool price, health score, fee          | Each LP's share                              |
-| Total LP supply, number of trades      | Order side, price and size                   |
-| Whether a pool trade was a buy or sell | Order book fills (even whether one happened) |
-| That an order exists, who placed it    |                                              |
-| Who sent a transaction, and when       |                                              |
-| Amount moved out to a public wallet    |                                              |
+| Public (anyone can see)                | Private (encrypted)                  |
+| -------------------------------------- | ------------------------------------ |
+| Token list, names, images              | Every user's balance                 |
+| Total supply of each token             | Swap amounts                         |
+| Faucet / mint amounts                  | Pool reserves                        |
+| Pool price, health score, fee          | Each LP's share                      |
+| Total LP supply, number of trades      | Waiting orders' side, price and size |
+| Whether a pool trade was a buy or sell | Order book trade sizes and sides     |
+| That an order exists, who placed it    | How much each LP earned in fees      |
+| Which orders traded, and at what price |                                      |
+| That an LP fee payout happened         |                                      |
+| Who sent a transaction, and when       |                                      |
+| Amounts moved out to / in from a wallet |                                     |
 
 > Privacy needs a crowd. With 3 test users, timing alone can give things away.
 > Fine for a devnet demo — just worth knowing.
@@ -135,7 +138,7 @@ Other accounts:
 | Account                               | Holds                                          |
 | ------------------------------------- | ---------------------------------------------- |
 | `UserAccount` — PDA("user", wallet)   | your x25519 public key (registered once)       |
-| `TokenInfo` — PDA("token", mint)      | creator, max supply, public exchange supply    |
+| `TokenInfo` — PDA("token", mint)      | creator, max supply, public supplies, vault    |
 | `Config` — PDA("config")              | admin, fake USDC mint                          |
 
 **One rule keeps balances honest:** only an MPC callback can write `balance_ct`.
@@ -179,9 +182,12 @@ Every token — USDC, your token, LP tokens — works the same way:
 - `TokenInfo` shows the **exchange supply** publicly.
 
 ```
-total supply  =  exchange supply   (sum of all private ETA balances)
-              +  SPL supply        (tokens moved out to public wallets)
+total supply  =  exchange supply   (all private balances; covers the vault's tokens)
+              +  public supply     (SPL tokens in wallets = SPL supply − vault)
 ```
+
+The max supply counts both, so moving tokens out and back in never lets the
+creator mint more.
 
 **Fake USDC.** Created once at setup, 6 decimals.
 Creator panel: mint any amount. User panel: 30 USDC per click (later task).
@@ -254,10 +260,28 @@ purpose: an exact number, combined with the public price, would reveal the reser
 private; the total LP supply is public. The first LP supply is fixed at
 1,000,000 — the usual `√(token · USDC)` would, together with the price, reveal the reserves.
 
-**Fees go to LPs automatically.** The fee stays inside the pool, so every LP token
-is backed by more over time.
-Example: pool `1,000 TOK + 1,000 USDC`, you own 10% of LP. Swaps leave 60 USDC of
-fees behind. You withdraw 10% of `1,000 TOK + 1,060 USDC` → `100 TOK + 106 USDC`.
+**Swap fees are paid to LP holders, privately.**
+
+```
+ swap 100 USDC, fee 0.30%        pool (encrypted)
+ ──────────────────────────▶     reserves    += 99.70
+                                 fee counter += 0.30 per LP token
+
+ backend, once trading pauses ── collect_lp_fees ──▶ Arcium
+                                 your USDC  += your LP × (counter − your last counter)
+                                 "fees earned" += the same   (only you can read it)
+```
+
+**Example.** You hold 10% of the LP. Trades pay 5 USDC and 800 TOK in fees →
+0.5 USDC and 80 TOK land in your private balances, you get a "LP fees received"
+notice, and the pool page shows *Swap fees earned: +0.5 USDC +80 TOK*.
+
+- Nothing to claim: the backend sends the payouts (anyone may; the fees always
+  go to the holder). A payout briefly locks the pool, so it waits ~10 s after
+  the last trade.
+- Public: that a payout happened, up to which trade. Private: how much.
+- LP tokens stay private (they can't move to a wallet), so every LP token is
+  always counted by exactly one payout record.
 
 > One swap per pool at a time (pool lock), for the same reason as the ETA lock.
 
@@ -265,42 +289,58 @@ fees behind. You withdraw 10% of `1,000 TOK + 1,060 USDC` → `100 TOK + 106 USD
 
 ## 9. Private order book
 
-Limit orders whose **side, price and size** stay encrypted. Inspired by
+Orders whose **side, price and size** stay encrypted. Inspired by
 [private-orderflow-dex](https://github.com/0xsupremedev/private-orderflow-dex)
 (encrypted orders, matching inside MPC), changed in two ways: funds are locked
 **inside your encrypted balance** (not a public escrow that leaks the size), and
-matching happens **as the order is placed**, so no crank is needed.
+matching happens **as the order is placed**.
 
 ```
  OrderBook  PDA("book", token)          ← one per token, opened by its creator
  ├── book     8 slots, one ciphertext only Arcium can read
- │            each slot: side · price · size · left · fills to collect
- └── owners   public: who holds each slot, and in what order they came
+ │            each slot: side · price · size · left · fills to settle
+ ├── owners   public: who holds each slot, in what order they came
+ └── public   which slots just traded · last trade price
 
  OrderViews PDA("book_views", book)     ← your own copy of your order,
-                                          encrypted to you (side · price · size · left)
+                                          encrypted to you
 ```
 
+**Order types**
+
+| Type      | What it does                                                         |
+| --------- | -------------------------------------------------------------------- |
+| Limit     | Trades at your price or better; the rest waits in the book           |
+| Market    | Trades now up to a worst price (reference ± slippage); rest returned |
+| Post-only | Only waits in the book; refused if it would trade on arrival         |
+
+**How a trade settles**
+
 ```
-Place    encrypt {side, price, size} → Arcium locks price×size USDC (buy)
-         or size tokens (sell) from your ETA, adds the order, then matches it:
-         best price first, then oldest; trades happen at the resting order's price
-Collect  your fills (made by others) move into your ETAs
-Cancel   the unfilled part goes back too, and the slot is freed
+Bob sends an order ─▶ Arcium matches it: best price first, then oldest,
+                      at the waiting order's price
+                    ─▶ Bob is paid at once (his balances are in the computation)
+                    ─▶ the book marks Alice's order as "traded" (public bit)
+backend settler     ─▶ settle_order for Alice ─▶ her fills land in her balance,
+                      a fully filled order leaves the book, her app notifies her
 ```
 
-**Example.** Alice rests *sell 1,000 @ 0.01*. Bob sends *buy 400 @ 0.012*.
-Arcium fills 400 at **0.01** (Alice's price): Bob gets 400 tokens and 0.80 USDC of
-his 4.80 lock back, at once. Alice sees it when she presses *Collect*.
+**Example.** Alice waits with *buy 500 @ 0.01*. Bob sends *sell 200 @ 0.009*.
+Arcium fills 200 at **0.01** (Alice's price): Bob gets 2 USDC at once. Seconds
+later the settler moves 200 tokens into Alice's balance, and she sees
+"Your buy order partly filled".
 
-- **Both balances are rewritten on every action** (USDC and the token), so the
-  chain can't tell a buy from a sell. The whole book is rewritten too, so nobody
-  can tell whether a trade happened.
-- **Only the placer is paid at once.** Resting orders collect later, because
-  their owners' balances aren't in that computation.
+- **Why a settler?** Arcium can only change balances handed into the computation.
+  Nobody knows beforehand which hidden order will match, so Alice's balances
+  aren't in Bob's computation. The settler hands them in right after. It only
+  pays fees; the funds always go to the order's owner. Anyone may settle a
+  traded order; only its owner may cancel.
+- **What this makes public:** which orders traded, and each trade's price (so a
+  waiting order's price shows once it trades). Never sizes or sides. Balances
+  are still rewritten on every action, so the chain can't tell a buy from a sell.
 - **Why 8 slots?** The book's result must fit in one Solana transaction (Arcium's
-  callback): 8 packed slots is the most that fits. 3 orders per wallet, so no
-  one can fill a book alone.
+  callback): 8 packed slots is the most that fits. 3 per wallet. Market orders
+  never take a slot.
 - Orders trade in whole tokens; prices are USDC with 6 decimals.
 
 ---
@@ -308,13 +348,14 @@ his 4.80 lock back, at once. Alice sees it when she presses *Collect*.
 ## 10. Moving tokens to your public wallet (ZK proof)
 
 Your tokens live in ETAs. To move some into your normal wallet you **prove in
-zero-knowledge** that you have enough, and the program mints real SPL tokens to you.
+zero-knowledge** that you have enough, and the program sends real SPL tokens to you.
 
 ```
 1. Prepare  (MPC)      publish fingerprint = SHA3-256(balance ‖ salt),
                        send you the salt (encrypted), freeze the ETA
 2. Prove    (browser)  Groth16 proof: "the balance inside this fingerprint ≥ amount"
-3. Withdraw (program)  verify the proof → mint `amount` real tokens to your wallet
+3. Withdraw (program)  verify the proof → send `amount` real tokens to your wallet
+                       (from the vault first, then minted: see section 11)
    Finish   (MPC)      subtract `amount` from your ETA → unfreeze
 ```
 
@@ -338,12 +379,41 @@ proof of "≥ 100", never 250. Your wallet gets 100 real tokens; your ETA now ho
 - **Checked on-chain** with Solana's `alt_bn128` syscalls (Groth16 on BN254, ~100k CU).
 - **Trusted setup.** Groth16 needs one. This demo ran it on one machine; a real
   launch would use a multi-party ceremony.
-- **Deposit back (public → private)** comes later: burn tokens from your wallet,
-  MPC credits your ETA.
+---
+
+## 11. Moving public tokens in (the vault)
+
+Tokens in a public wallet can move into your private balance. They are **not
+burned and re-minted**: they wait in the exchange's vault.
+
+```
+ wallet ──transfer──▶ vault = token account PDA("vault", mint), owned by the program
+                          │
+                          ▼
+ Arcium: your encrypted balance += amount       (public amount in, private from here on)
+```
+
+Moving out (section 10) then pays **from the vault first**:
+
+| Token                                   | Move out pays from                 |
+| --------------------------------------- | ---------------------------------- |
+| Made here (USDC, tokens created here)   | vault first, then mints the rest   |
+| From outside (any other SPL mint)       | vault only: never minted here      |
+| LP tokens                               | can't move out (they stay private) |
+
+**Example.** Alice moves 40 ROCK in → vault 40. Bob moves 100 ROCK out → 40 come
+from the vault, 60 are minted. The total supply never changes.
+
+- **Outside tokens:** anyone lists one once (`register_external_token`), then it
+  moves in and out. Pools and order books are only for tokens created here.
+- If Arcium's credit fails, the tokens are safe in the vault and still counted;
+  "finish moving in" sends the credit again.
+- An outside token is only as safe as its own mint: its freeze authority, for
+  example, could freeze the vault.
 
 ---
 
-## 11. Tech stack
+## 12. Tech stack
 
 | Layer    | Tech                                                                  |
 | -------- | --------------------------------------------------------------------- |
@@ -355,11 +425,11 @@ proof of "≥ 100", never 250. Your wallet gets 100 real tokens; your ETA now ho
 
 ---
 
-## 12. Build order
+## 13. Build order
 
 1. ✅ **Keys, ETAs, fake USDC, create token** (live on devnet)
 2. ✅ **AMM + user panel** — create pool, buy / sell, price chart, health, 30 USDC faucet (live on devnet)
 3. ✅ **Move to wallet with a ZK proof** + backend account index (no chain scans)
 4. ✅ **Private order book** (live on devnet)
-5. Add / remove liquidity for other LPs
-6. Deposit back (public → private)
+5. ✅ **LP fees paid privately + public tokens in through the vault** (live on devnet)
+6. Add / remove liquidity for other LPs

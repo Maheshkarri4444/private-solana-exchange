@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { HEALTH_HELP, HealthBadge } from "@/components/HealthBadge";
+import { LiquidityCard } from "@/components/LiquidityCard";
 import { PriceChart } from "@/components/PriceChart";
 import { SwapPanel } from "@/components/SwapPanel";
 import { Card, PrivateBadge, Spinner, TokenIcon } from "@/components/ui";
@@ -71,7 +72,7 @@ export default function PoolPage() {
             <Stat label="Market cap" value={formatUsd(marketCap(pool))} />
             <Stat label="Total supply" value={formatAmount(pool.totalSupply)} />
             <Stat label="Private supply" value={formatAmount(pool.privateSupply)} hint="inside the exchange" />
-            <Stat label="SPL supply" value={formatAmount(pool.splSupply)} hint="in public wallets" />
+            <Stat label="Public supply" value={formatAmount(pool.splSupply)} hint="SPL tokens in wallets" />
             <Stat label="LP supply" value={formatAmount(pool.lpSupply)} hint="each holder's share is private" />
             <Stat label="Swap fee" value={`${(pool.feeBps / 100).toFixed(2)}%`} hint="goes to liquidity providers" />
             <Stat label="Trades" value={pool.swapCount.toLocaleString("en-US")} />
@@ -100,8 +101,9 @@ export default function PoolPage() {
         )}
       </div>
 
-      <div className="lg:sticky lg:top-24 lg:self-start">
+      <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
         <SwapPanel pool={pool} onTraded={refresh} />
+        <LiquidityCard pool={pool} />
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ import {
 } from "react";
 import { fetchMxePublicKey } from "@/lib/arcium";
 import { explainError } from "@/lib/errors";
-import { type PrivateKeys, SIGN_MESSAGE, clearKeys, deriveKeys, loadKeys, saveKeys } from "@/lib/keys";
+import { type PrivateKeys, SIGN_MESSAGE, deriveKeys, loadKeys, saveKeys } from "@/lib/keys";
 import { type ExchangeProgram, getProgram, pdas } from "@/lib/program";
 
 /** For reading public data (pools, supplies) before a wallet connects. */
@@ -48,7 +48,6 @@ interface PrivateAccount {
   unlockError: string | null;
   unlock: () => Promise<void>;
   register: () => Promise<void>;
-  lock: () => void;
 }
 
 const Context = createContext<PrivateAccount | null>(null);
@@ -169,11 +168,6 @@ export function PrivateAccountProvider({ children }: { children: ReactNode }) {
     await refreshRegistration();
   }, [program, publicKey, keys, send, refreshRegistration]);
 
-  const lock = useCallback(() => {
-    if (wallet) clearKeys(wallet);
-    setKeys(null);
-  }, [wallet]);
-
   const keyMismatch =
     !!keys &&
     !!registeredKey &&
@@ -192,7 +186,6 @@ export function PrivateAccountProvider({ children }: { children: ReactNode }) {
     unlockError,
     unlock,
     register,
-    lock,
   };
 
   return <Context.Provider value={value}>{children}</Context.Provider>;

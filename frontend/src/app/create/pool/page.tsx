@@ -32,8 +32,8 @@ function Content() {
             <li>Your deposit is encrypted in this browser.</li>
             <li>Arcium moves it from your private balances into the pool — nobody sees the amounts.</li>
             <li>
-              You get 1,000,000 LP tokens (private). Swap fees stay in the pool, so your LP share grows in
-              value.
+              You get 1,000,000 LP tokens (private). Every trade&apos;s fee is paid to you by your share,
+              straight into your private balances: nothing to claim.
             </li>
             <li>The starting price = USDC ÷ tokens. From then on, every trade moves it.</li>
           </ol>

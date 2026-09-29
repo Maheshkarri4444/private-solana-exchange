@@ -8,7 +8,7 @@ export function BookSlots({ book, me }: { book: BookRecord; me: string | null })
   return (
     <Card
       title="The book"
-      subtitle="Anyone can see that these orders exist and who placed them. Side, price and size are encrypted: only Arcium can match them."
+      subtitle="Orders waiting to trade. Anyone can see that they exist and whose they are; side, price and size are encrypted and only Arcium can match them."
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {book.slots.map((s, i) =>
@@ -20,7 +20,9 @@ export function BookSlots({ book, me }: { book: BookRecord; me: string | null })
                   <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">YOU</span>
                 )}
               </div>
-              <p className="mt-2 text-sm font-semibold">Hidden order</p>
+              <p className="mt-2 text-sm font-semibold">
+                {book.settleMask & (1 << i) ? <span className="text-private">Traded · settling</span> : "Hidden order"}
+              </p>
               <p className="font-mono text-xs text-muted">
                 #{s.seq} · {shortAddress(s.owner)}
               </p>

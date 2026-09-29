@@ -14,7 +14,7 @@ use crate::{
 /// Buy (USDC → token) or sell (token → USDC) against a pool with private reserves.
 /// The amount and slippage limit are encrypted in the trader's browser; Arcium
 /// publishes only the new price and health.
-#[queue_computation_accounts("swap", payer)]
+#[queue_computation_accounts("pool_swap", payer)]
 #[derive(Accounts)]
 #[instruction(computation_offset: u64)]
 pub struct Swap<'info> {
@@ -67,7 +67,7 @@ pub struct Swap<'info> {
     #[account(mut, address = derive_comp_pda!(computation_offset, mxe_account))]
     /// CHECK: computation_account, checked by the arcium program.
     pub computation_account: UncheckedAccount<'info>,
-    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_SWAP))]
+    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_POOL_SWAP))]
     pub comp_def_account: Box<Account<'info, ComputationDefinitionAccount>>,
     #[account(mut, address = derive_cluster_pda!(mxe_account))]
     pub cluster_account: Box<Account<'info, Cluster>>,
@@ -98,8 +98,7 @@ pub fn swap_handler(
     let total_supply = ctx
         .accounts
         .token_info
-        .exchange_supply
-        .checked_add(mint_supply(&ctx.accounts.token_mint)?)
+        .circulating(mint_supply(&ctx.accounts.token_mint)?)
         .ok_or(ErrorCode::Overflow)?;
 
     let a = &mut *ctx.accounts;
@@ -140,6 +139,10 @@ pub fn swap_handler(
         .plaintext_bool(is_buy)
         .plaintext_u16(keep_q14(a.pool.fee_bps))
         .plaintext_u64(total_supply)
+        .plaintext_u128(a.pool.fee_growth_nonce)
+        .account(a.pool.key(), Pool::FEE_GROWTH_OFFSET, Pool::FEE_GROWTH_LEN)
+        .plaintext_bool(a.pool.fee_growth_initialized)
+        .plaintext_u64(FEE_SCALE)
         .build();
 
     let writable = |pubkey| CallbackAccount {
@@ -157,7 +160,7 @@ pub fn swap_handler(
         ctx.accounts,
         computation_offset,
         args,
-        vec![SwapCallback::callback_ix(
+        vec![PoolSwapCallback::callback_ix(
             computation_offset,
             &ctx.accounts.mxe_account,
             &callback_accounts,
@@ -169,11 +172,11 @@ pub fn swap_handler(
     Ok(())
 }
 
-#[callback_accounts("swap")]
+#[callback_accounts("pool_swap")]
 #[derive(Accounts)]
-pub struct SwapCallback<'info> {
+pub struct PoolSwapCallback<'info> {
     pub arcium_program: Program<'info, Arcium>,
-    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_SWAP))]
+    #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_POOL_SWAP))]
     pub comp_def_account: Box<Account<'info, ComputationDefinitionAccount>>,
     #[account(address = derive_mxe_pda!())]
     pub mxe_account: Box<Account<'info, MXEAccount>>,
@@ -192,9 +195,9 @@ pub struct SwapCallback<'info> {
     pub token_eta: Box<Account<'info, EncryptedTokenAccount>>,
 }
 
-pub fn swap_callback_handler(
-    ctx: Context<SwapCallback>,
-    output: SignedComputationOutputs<SwapOutput>,
+pub fn pool_swap_callback_handler(
+    ctx: Context<PoolSwapCallback>,
+    output: SignedComputationOutputs<PoolSwapOutput>,
 ) -> Result<()> {
     let computation = ctx.accounts.computation_account.key();
     let a = &mut *ctx.accounts;
@@ -221,17 +224,18 @@ pub fn swap_callback_handler(
     };
 
     let result = match output.verify_output(&a.cluster_account, &a.computation_account) {
-        Ok(SwapOutput { field_0 }) => field_0,
+        Ok(PoolSwapOutput { field_0 }) => field_0,
         Err(_) => {
             emit!(event);
             return Ok(());
         }
     };
-    let SwapOutputStruct0 {
+    let PoolSwapOutputStruct0 {
         field_0: usdc_bal,
         field_1: token_bal,
         field_2: reserves,
         field_3: stats,
+        field_4: fees,
     } = result;
 
     // Not enough balance or slippage exceeded: nothing moved, price unchanged.
@@ -253,6 +257,10 @@ pub fn swap_callback_handler(
     let pool = &mut a.pool;
     pool.reserves_ct = reserves.ciphertexts;
     pool.reserves_nonce = reserves.nonce;
+    // The fee went to the LP holders' side of the ledger (paid out by `collect_lp_fees`).
+    pool.fee_growth_ct = fees.ciphertexts[0];
+    pool.fee_growth_nonce = fees.nonce;
+    pool.fee_growth_initialized = true;
     pool.health = stats.field_2;
     pool.push_price(price, now);
     pool.swap_count = pool.swap_count.saturating_add(1);

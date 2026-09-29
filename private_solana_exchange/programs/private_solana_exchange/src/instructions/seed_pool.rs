@@ -95,8 +95,7 @@ pub fn seed_pool_handler(
     let total_supply = ctx
         .accounts
         .token_info
-        .exchange_supply
-        .checked_add(mint_supply(&ctx.accounts.token_mint)?)
+        .circulating(mint_supply(&ctx.accounts.token_mint)?)
         .ok_or(ErrorCode::Overflow)?;
 
     let a = &mut *ctx.accounts;

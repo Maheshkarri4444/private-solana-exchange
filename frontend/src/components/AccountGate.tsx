@@ -66,7 +66,7 @@ export function AccountGate({ children, inline = false }: { children: ReactNode;
     );
   }
 
-  // Only seen if the signature was rejected (or balances were locked from the menu).
+  // Only seen if the signature was rejected.
   if (!keys) {
     return (
       <GateCard

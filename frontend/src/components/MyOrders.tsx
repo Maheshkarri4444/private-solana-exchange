@@ -6,17 +6,17 @@ import { useBalances } from "@/hooks/useBalances";
 import { usePrivateAccount } from "@/hooks/usePrivateAccount";
 import { settleOrder } from "@/lib/actions";
 import type { BookRecord } from "@/lib/api";
-import { type MyOrder, myOrders } from "@/lib/books";
+import { type MyOrder, myOrders, toUsdc } from "@/lib/books";
 import { explainError } from "@/lib/errors";
 import { formatPrice } from "@/lib/format";
 import { pdas } from "@/lib/program";
-import { Button, Notice } from "./ui";
+import { Button, Notice, Spinner } from "./ui";
 
-/** Your orders in this book, decrypted in this browser. Nobody else can read them. */
+/** Your orders waiting in this book, decrypted in this browser. Nobody else can read them. */
 export function MyOrders({ book, onChanged }: { book: BookRecord; onChanged: () => void }) {
   const { program, provider, keys, mxePublicKey, send } = usePrivateAccount();
   const { refresh } = useBalances();
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   const me = provider?.wallet.publicKey.toBase58() ?? null;
@@ -24,23 +24,18 @@ export function MyOrders({ book, onChanged }: { book: BookRecord; onChanged: () 
   const orders = myOrders(book, me, keys, mxePublicKey).sort((a, b) => a.seq - b.seq);
   const symbol = book.token?.symbol ?? "TOKEN";
 
-  async function act(order: MyOrder, cancel: boolean) {
+  async function cancel(order: MyOrder) {
     if (!program || !provider) return;
-    setBusy(`${order.slot}-${cancel}`);
+    setBusy(order.slot);
     setNotice(null);
     try {
       await settleOrder(program, send, provider.wallet.publicKey, {
         tokenMint: new PublicKey(book.tokenMint),
         usdcMint: pdas.usdcMint(),
         slot: order.slot,
-        cancel,
+        cancel: true,
       });
-      setNotice({
-        tone: "success",
-        text: cancel
-          ? "Order closed. Everything it held is back in your private balance."
-          : "Up to date. Any fills are now in your private balance.",
-      });
+      setNotice({ tone: "success", text: "Order cancelled. Everything it held is back in your private balance." });
       refresh();
       onChanged();
     } catch (e) {
@@ -51,18 +46,16 @@ export function MyOrders({ book, onChanged }: { book: BookRecord; onChanged: () 
   }
 
   if (orders.length === 0) {
-    return <p className="text-sm text-muted">You have no orders in this book.</p>;
+    return <p className="text-sm text-muted">You have no orders waiting in this book.</p>;
   }
 
   return (
     <div className="space-y-3">
       <p className="text-xs leading-relaxed text-muted">
-        When someone trades against your order, only Arcium knows. Press <span className="text-fg">Collect</span> to
-        see new fills and move them into your balance.
+        When someone trades with one of these, it settles into your private balance by itself.
       </p>
       {orders.map((o) => {
         const filled = o.lots - o.remaining;
-        const done = o.remaining === 0n;
         return (
           <div key={o.slot} className="rounded-xl border border-line p-3">
             <div className="flex items-center justify-between gap-2">
@@ -72,7 +65,7 @@ export function MyOrders({ book, onChanged }: { book: BookRecord; onChanged: () 
                 {o.isBuy ? "BUY" : "SELL"}
               </span>
               <span className="font-mono text-sm">
-                {o.lots.toLocaleString()} {symbol} @ {formatPrice(Number(o.price) / 1e6)}
+                {o.lots.toLocaleString()} {symbol} @ {formatPrice(toUsdc(o.price))}
               </span>
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -81,29 +74,25 @@ export function MyOrders({ book, onChanged }: { book: BookRecord; onChanged: () 
                 style={{ width: `${o.lots > 0n ? Number((filled * 100n) / o.lots) : 0}%` }}
               />
             </div>
-            <p className="mt-1 text-xs text-muted">
-              {done ? "Filled" : `Filled ${filled.toLocaleString()} of ${o.lots.toLocaleString()}`} · order #{o.seq}
-            </p>
-            <div className="mt-3 flex gap-2">
-              {!done && (
-                <Button
-                  variant="ghost"
-                  className="h-9 flex-1"
-                  onClick={() => act(o, false)}
-                  loading={busy === `${o.slot}-false`}
-                  disabled={!!busy}
-                >
-                  Collect
-                </Button>
+            <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-muted">
+              {o.settling ? (
+                <span className="flex items-center gap-1.5 text-private">
+                  <Spinner /> Traded: moving to your balance…
+                </span>
+              ) : (
+                <span>
+                  {filled === 0n ? "Waiting" : `Filled ${filled.toLocaleString()} of ${o.lots.toLocaleString()}`} ·
+                  order #{o.seq}
+                </span>
               )}
               <Button
                 variant="ghost"
-                className="h-9 flex-1"
-                onClick={() => act(o, true)}
-                loading={busy === `${o.slot}-true`}
-                disabled={!!busy}
+                className="h-8 px-3 text-xs"
+                onClick={() => cancel(o)}
+                loading={busy === o.slot}
+                disabled={busy !== null || o.settling}
               >
-                {done ? "Close" : "Cancel"}
+                Cancel
               </Button>
             </div>
           </div>

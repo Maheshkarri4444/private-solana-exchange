@@ -6,11 +6,12 @@ import { type EtaRecord, type TokenMeta, listEtas, listTokens } from "@/lib/api"
 import { decryptBalance } from "@/lib/arcium";
 import { usePrivateAccount } from "./usePrivateAccount";
 
-const CHANGED = "private-balances-changed";
+/** Fired after anything that changes the user's balances (a mint, a swap, a payout…). */
+export const BALANCES_CHANGED = "private-balances-changed";
 
 /** Tells every balances view on the page to reload (after a mint, swap, …). */
 export function notifyBalancesChanged() {
-  window.dispatchEvent(new Event(CHANGED));
+  window.dispatchEvent(new Event(BALANCES_CHANGED));
 }
 
 export interface PrivateBalance {
@@ -73,8 +74,8 @@ export function useBalances() {
 
   useEffect(() => {
     load();
-    window.addEventListener(CHANGED, load);
-    return () => window.removeEventListener(CHANGED, load);
+    window.addEventListener(BALANCES_CHANGED, load);
+    return () => window.removeEventListener(BALANCES_CHANGED, load);
   }, [load]);
 
   return { balances, tokens, loading, error, refresh: notifyBalancesChanged };

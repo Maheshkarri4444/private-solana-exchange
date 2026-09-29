@@ -72,12 +72,20 @@ pub mod private_solana_exchange {
         init_comp_def::init_seed_pool_comp_def_handler(ctx, circuit_url)
     }
 
-    /// One-time setup: register the `swap` MPC circuit.
-    pub fn init_swap_comp_def(
-        ctx: Context<InitSwapCompDef>,
+    /// One-time setup: register the `pool_swap` MPC circuit.
+    pub fn init_pool_swap_comp_def(
+        ctx: Context<InitPoolSwapCompDef>,
         circuit_url: Option<String>,
     ) -> Result<()> {
-        init_comp_def::init_swap_comp_def_handler(ctx, circuit_url)
+        init_comp_def::init_pool_swap_comp_def_handler(ctx, circuit_url)
+    }
+
+    /// One-time setup: register the `lp_collect` MPC circuit.
+    pub fn init_lp_collect_comp_def(
+        ctx: Context<InitLpCollectCompDef>,
+        circuit_url: Option<String>,
+    ) -> Result<()> {
+        init_comp_def::init_lp_collect_comp_def_handler(ctx, circuit_url)
     }
 
     /// Open an empty encrypted account for a token (needed before a first swap).
@@ -124,12 +132,46 @@ pub mod private_solana_exchange {
         swap::swap_handler(ctx, computation_offset, is_buy, order_ct, order_nonce)
     }
 
-    #[arcium_callback(encrypted_ix = "swap")]
-    pub fn swap_callback(
-        ctx: Context<SwapCallback>,
-        output: SignedComputationOutputs<SwapOutput>,
+    #[arcium_callback(encrypted_ix = "pool_swap")]
+    pub fn pool_swap_callback(
+        ctx: Context<PoolSwapCallback>,
+        output: SignedComputationOutputs<PoolSwapOutput>,
     ) -> Result<()> {
-        swap::swap_callback_handler(ctx, output)
+        swap::pool_swap_callback_handler(ctx, output)
+    }
+
+    /// Open the record that tracks one holder's share of a pool's swap fees (anyone).
+    pub fn open_lp_position(ctx: Context<OpenLpPosition>) -> Result<()> {
+        lp::open_lp_position_handler(ctx)
+    }
+
+    /// Pay an LP holder their share of the swap fees since the last payout
+    /// (anyone may send it; the fees always go to the holder).
+    pub fn collect_lp_fees(ctx: Context<CollectLpFees>, computation_offset: u64) -> Result<()> {
+        lp::collect_lp_fees_handler(ctx, computation_offset)
+    }
+
+    #[arcium_callback(encrypted_ix = "lp_collect")]
+    pub fn lp_collect_callback(
+        ctx: Context<LpCollectCallback>,
+        output: SignedComputationOutputs<LpCollectOutput>,
+    ) -> Result<()> {
+        lp::lp_collect_callback_handler(ctx, output)
+    }
+
+    /// List an SPL token this exchange didn't create, so it can be moved in (anyone).
+    pub fn register_external_token(ctx: Context<RegisterExternalToken>) -> Result<()> {
+        vault::register_external_token_handler(ctx)
+    }
+
+    /// Open the program's vault (token account) for a mint (anyone).
+    pub fn open_vault(ctx: Context<OpenVault>) -> Result<()> {
+        vault::open_vault_handler(ctx)
+    }
+
+    /// Move public SPL tokens from your wallet into your private balance.
+    pub fn shield(ctx: Context<Shield>, computation_offset: u64, amount: u64) -> Result<()> {
+        vault::shield_handler(ctx, computation_offset, amount)
     }
 
     /// One-time setup: register the `commit_balance` MPC circuit.
@@ -161,7 +203,8 @@ pub mod private_solana_exchange {
         unshield::commit_balance_callback_handler(ctx, output)
     }
 
-    /// Move to wallet, step 2: verify the ZK proof and mint real SPL tokens.
+    /// Move to wallet, step 2: verify the ZK proof and send real SPL tokens
+    /// (from the vault first, minting the rest only for exchange-made tokens).
     pub fn unshield(ctx: Context<Unshield>, amount: u64, proof: Groth16Proof) -> Result<()> {
         unshield::unshield_handler(ctx, amount, proof)
     }
@@ -184,20 +227,20 @@ pub mod private_solana_exchange {
         unshield::cancel_unshield_handler(ctx)
     }
 
-    /// One-time setup: register the `place_order` MPC circuit.
-    pub fn init_place_order_comp_def(
-        ctx: Context<InitPlaceOrderCompDef>,
+    /// One-time setup: register the `book_place` MPC circuit.
+    pub fn init_book_place_comp_def(
+        ctx: Context<InitBookPlaceCompDef>,
         circuit_url: Option<String>,
     ) -> Result<()> {
-        init_comp_def::init_place_order_comp_def_handler(ctx, circuit_url)
+        init_comp_def::init_book_place_comp_def_handler(ctx, circuit_url)
     }
 
-    /// One-time setup: register the `settle_order` MPC circuit.
-    pub fn init_settle_order_comp_def(
-        ctx: Context<InitSettleOrderCompDef>,
+    /// One-time setup: register the `book_settle` MPC circuit.
+    pub fn init_book_settle_comp_def(
+        ctx: Context<InitBookSettleCompDef>,
         circuit_url: Option<String>,
     ) -> Result<()> {
-        init_comp_def::init_settle_order_comp_def_handler(ctx, circuit_url)
+        init_comp_def::init_book_settle_comp_def_handler(ctx, circuit_url)
     }
 
     /// Open a private TOKEN/USDC order book. Token creator only.
@@ -205,25 +248,28 @@ pub mod private_solana_exchange {
         orders::create_order_book_handler(ctx)
     }
 
-    /// Place a limit order; side, price and size are encrypted in the browser.
+    /// Place an order (`kind`: 0 limit, 1 market, 2 post-only); side, price and
+    /// size are encrypted in the browser.
     pub fn place_order(
         ctx: Context<PlaceOrder>,
         computation_offset: u64,
         order_ct: [[u8; 32]; 3],
         order_nonce: u128,
+        kind: u8,
     ) -> Result<()> {
-        orders::place_order_handler(ctx, computation_offset, order_ct, order_nonce)
+        orders::place_order_handler(ctx, computation_offset, order_ct, order_nonce, kind)
     }
 
-    #[arcium_callback(encrypted_ix = "place_order")]
-    pub fn place_order_callback(
-        ctx: Context<PlaceOrderCallback>,
-        output: SignedComputationOutputs<PlaceOrderOutput>,
+    #[arcium_callback(encrypted_ix = "book_place")]
+    pub fn book_place_callback(
+        ctx: Context<BookPlaceCallback>,
+        output: SignedComputationOutputs<BookPlaceOutput>,
     ) -> Result<()> {
-        orders::place_order_callback_handler(ctx, output)
+        orders::book_place_callback_handler(ctx, output)
     }
 
-    /// Collect an order's fills into your balances; `cancel` also refunds the rest.
+    /// Settle a traded order into its owner's balances (anyone); `cancel` also
+    /// returns what is still locked (owner only).
     pub fn settle_order(
         ctx: Context<SettleOrder>,
         computation_offset: u64,
@@ -233,11 +279,11 @@ pub mod private_solana_exchange {
         orders::settle_order_handler(ctx, computation_offset, slot, cancel)
     }
 
-    #[arcium_callback(encrypted_ix = "settle_order")]
-    pub fn settle_order_callback(
-        ctx: Context<SettleOrderCallback>,
-        output: SignedComputationOutputs<SettleOrderOutput>,
+    #[arcium_callback(encrypted_ix = "book_settle")]
+    pub fn book_settle_callback(
+        ctx: Context<BookSettleCallback>,
+        output: SignedComputationOutputs<BookSettleOutput>,
     ) -> Result<()> {
-        orders::settle_order_callback_handler(ctx, output)
+        orders::book_settle_callback_handler(ctx, output)
     }
 }

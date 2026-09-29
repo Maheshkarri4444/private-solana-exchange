@@ -17,10 +17,13 @@ import {
   type BookDoc,
   type BookViewsDoc,
   type EtaDoc,
+  type LpPositionDoc,
   type PoolDoc,
+  bookPrices,
   bookViews,
   books,
   etas,
+  lpPositions,
   pools,
   prices,
   tokens,
@@ -74,6 +77,7 @@ async function indexEta(address: string, a: Decoded, slot: number) {
     unshieldSaltCt: a.unshield_salt_ct ? b64(a.unshield_salt_ct) : "",
     unshieldSaltNonce: str(a.unshield_salt_nonce),
     unshieldAmount: str(a.unshield_amount),
+    shieldOwed: str(a.shield_owed),
     slot,
   };
   await upsertNewer(etas(), doc);
@@ -93,6 +97,7 @@ async function indexPool(address: string, a: Decoded, slot: number) {
     createdAt: Number(str(a.created_at)),
     lastTradeAt: Number(str(a.last_trade_at)),
     busy: a.pending_computation.toBase58() !== DEFAULT_KEY,
+    feesOn: Boolean(a.fee_growth_initialized),
     slot,
   };
   await upsertNewer(pools(), doc);
@@ -101,21 +106,23 @@ async function indexPool(address: string, a: Decoded, slot: number) {
   const points = (a.price_history as Decoded[])
     .slice(0, a.history_len)
     .map((p) => ({ pool: address, time: Number(str(p.timestamp)), price: str(p.price) }));
-  await savePrices(points);
+  await savePoints(prices(), points);
 
   // Every successful seed or trade pushed one price. Missing some means the
   // index was offline for more than the 32 the account keeps: rebuild them.
   const expected = doc.status === 1 ? doc.swapCount + 1 : 0;
   if ((await prices().countDocuments({ pool: address })) < expected) {
-    backfillPrices(address, doc.swapCount).catch((e) =>
+    backfill(address, doc.swapCount, "PoolUpdated", "pool", prices()).catch((e) =>
       console.error("indexer: price backfill failed —", e?.message),
     );
   }
 }
 
-async function savePrices(points: { pool: string; time: number; price: string }[]) {
+type Point = { time: number; price: string } & ({ pool: string } | { book: string });
+
+async function savePoints(col: { bulkWrite: Function }, points: Point[]) {
   if (points.length === 0) return;
-  await prices()
+  await col
     .bulkWrite(
       points.map((p) => ({ updateOne: { filter: p, update: { $setOnInsert: p }, upsert: true } })),
       { ordered: false },
@@ -126,14 +133,15 @@ async function savePrices(points: { pool: string; time: number; price: string }[
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * A pool's full price history, read from its PoolUpdated events. One RPC call per
- * transaction, spaced out because public RPCs rate-limit getTransaction.
+ * Trade prices from an account's events (`PoolUpdated` for pools, `OrderPlaced`
+ * for books). One RPC call per transaction, spaced out because public RPCs
+ * rate-limit getTransaction.
  */
-export async function pricesFromEvents(pool: string) {
-  const points: { pool: string; time: number; price: string }[] = [];
+export async function pricesFromEvents(address: string, eventName: string) {
+  const points: { time: number; price: string }[] = [];
   let before: string | undefined;
   for (;;) {
-    const sigs = await connection.getSignaturesForAddress(new PublicKey(pool), { before, limit: 1000 });
+    const sigs = await connection.getSignaturesForAddress(new PublicKey(address), { before, limit: 1000 });
     for (const sig of sigs) {
       if (sig.err) continue;
       await sleep(500);
@@ -144,8 +152,10 @@ export async function pricesFromEvents(pool: string) {
       if (!tx?.blockTime || !tx.meta?.logMessages) continue;
       for (const event of events.parseLogs(tx.meta.logMessages)) {
         const e = event.data as Decoded;
-        if (event.name === "PoolUpdated" && e.ok && e.pool.toBase58() === pool) {
-          points.push({ pool, time: tx.blockTime, price: str(e.price) });
+        const mine = (e.pool ?? e.book)?.toBase58() === address;
+        const traded = eventName === "PoolUpdated" ? e.ok : Number(str(e.price)) > 0;
+        if (event.name === eventName && mine && traded) {
+          points.push({ time: tx.blockTime, price: str(e.price) });
         }
       }
     }
@@ -154,21 +164,27 @@ export async function pricesFromEvents(pool: string) {
   }
 }
 
-const backfilled = new Map<string, number>(); // pool → trade count at its last backfill
+const backfilled = new Map<string, number>(); // account → trade count at its last backfill
 
-async function backfillPrices(pool: string, swapCount: number) {
-  if (backfilled.get(pool) === swapCount) return; // already tried at this state
-  backfilled.set(pool, swapCount);
+async function backfill(
+  address: string,
+  trades: number,
+  eventName: string,
+  key: "pool" | "book",
+  col: { findOne: Function; bulkWrite: Function },
+) {
+  if (backfilled.get(address) === trades) return; // already tried at this state
+  backfilled.set(address, trades);
   let added = 0;
-  for (const p of await pricesFromEvents(pool)) {
+  for (const p of await pricesFromEvents(address, eventName)) {
     // A block's reported time can differ by a second from the clock the program
     // saw, so a stored point with the same price a moment apart is the same trade.
-    const near = { pool, price: p.price, time: { $gte: p.time - 5, $lte: p.time + 5 } };
-    if (await prices().findOne(near)) continue;
-    await savePrices([p]);
+    const near = { [key]: address, price: p.price, time: { $gte: p.time - 5, $lte: p.time + 5 } };
+    if (await col.findOne(near)) continue;
+    await savePoints(col, [{ [key]: address, ...p } as Point]);
     added++;
   }
-  console.log(`indexer: rebuilt ${added} missing prices for pool ${pool} from events`);
+  console.log(`indexer: rebuilt ${added} missing prices for ${key} ${address} from events`);
 }
 
 async function indexBook(address: string, a: Decoded, slot: number) {
@@ -185,9 +201,23 @@ async function indexBook(address: string, a: Decoded, slot: number) {
     createdAt: Number(str(a.created_at)),
     lastActivityAt: Number(str(a.last_activity_at)),
     busy: a.pending_computation.toBase58() !== DEFAULT_KEY,
+    settleMask: a.settle_mask,
+    lastPrice: str(a.last_price),
+    lastTradeAt: Number(str(a.last_trade_at)),
+    trades: Number(str(a.trades)),
     slot,
   };
   await upsertNewer(books(), doc);
+
+  // The account holds only the latest trade: keep each one for the chart, and
+  // rebuild from events if the index missed some while offline.
+  if (doc.trades === 0) return;
+  await savePoints(bookPrices(), [{ book: address, time: doc.lastTradeAt, price: doc.lastPrice }]);
+  if ((await bookPrices().countDocuments({ book: address })) < doc.trades) {
+    backfill(address, doc.trades, "OrderPlaced", "book", bookPrices()).catch((e) =>
+      console.error("indexer: book price backfill failed —", e?.message),
+    );
+  }
 }
 
 async function indexBookViews(address: string, a: Decoded, slot: number) {
@@ -201,6 +231,22 @@ async function indexBookViews(address: string, a: Decoded, slot: number) {
     slot,
   };
   await upsertNewer(bookViews(), doc);
+}
+
+async function indexLpPosition(address: string, a: Decoded, slot: number) {
+  const doc: LpPositionDoc = {
+    address,
+    pool: a.pool.toBase58(),
+    owner: a.owner.toBase58(),
+    earnedCt: b64(a.earned_ct),
+    earnedNonce: str(a.earned_nonce),
+    earnedInitialized: a.earned_initialized,
+    paidSwapCount: Number(str(a.paid_swap_count)),
+    paidAt: Number(str(a.paid_at)),
+    pending: a.pending_computation.toBase58() !== DEFAULT_KEY,
+    slot,
+  };
+  await upsertNewer(lpPositions(), doc);
 }
 
 /** Reads `image` / `description` from a token's metadata JSON, if reachable. */
@@ -219,12 +265,46 @@ function mintSupply(info: AccountInfo<Buffer> | null): string {
   return info && info.data.length >= 44 ? info.data.readBigUInt64LE(36).toString() : "0";
 }
 
+const METAPLEX = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+/** Name / symbol / URI of an outside token: Token-2022 metadata, else Metaplex, else its address. */
+async function outsideMetadata(mint: PublicKey) {
+  const own = await getTokenMetadata(connection, mint, "confirmed").catch(() => null);
+  if (own) return { name: own.name, symbol: own.symbol, uri: own.uri };
+  const [address] = PublicKey.findProgramAddressSync(
+    [Buffer.from("metadata"), METAPLEX.toBuffer(), mint.toBuffer()],
+    METAPLEX,
+  );
+  const info = await connection.getAccountInfo(address).catch(() => null);
+  if (info?.owner.equals(METAPLEX)) {
+    try {
+      // key (1) + update authority (32) + mint (32), then three length-prefixed strings.
+      let offset = 65;
+      const next = () => {
+        const len = info.data.readUInt32LE(offset);
+        const text = info.data.subarray(offset + 4, offset + 4 + len).toString("utf8");
+        offset += 4 + len;
+        return text.replace(/\0/g, "").trim();
+      };
+      const name = next();
+      const symbol = next();
+      const uri = next();
+      if (name || symbol) return { name: name || symbol, symbol: symbol || name, uri };
+    } catch {
+      // not a metadata layout we know: fall through
+    }
+  }
+  const short = mint.toBase58().slice(0, 4);
+  return { name: `Token ${short}…`, symbol: short.toUpperCase(), uri: "" };
+}
+
 /** `splSupply` is passed in when a full sync already fetched every mint in one call. */
 async function indexTokenInfo(a: Decoded, slot: number, splSupply?: string) {
   const mint = a.mint as PublicKey;
   const supplies = {
     exchangeSupply: str(a.exchange_supply),
     splSupply: splSupply ?? mintSupply(await connection.getAccountInfo(mint)),
+    vaultAmount: str(a.vault_amount),
     supplySlot: slot,
   };
   const known = await tokens().findOne({ mint: mint.toBase58() }, { projection: { _id: 1 } });
@@ -236,9 +316,14 @@ async function indexTokenInfo(a: Decoded, slot: number, splSupply?: string) {
     );
     return;
   }
-  // First time we see this token: pull its metadata once.
-  const metadata = await getTokenMetadata(connection, mint, "confirmed").catch(() => null);
+  // First time we see this token: pull its metadata once. Exchange-made tokens
+  // always carry Token-2022 metadata (if it isn't readable yet, try again later).
+  const isExternal = Boolean(a.is_external);
+  const metadata = isExternal
+    ? await outsideMetadata(mint)
+    : await getTokenMetadata(connection, mint, "confirmed").catch(() => null);
   if (!metadata) return;
+  const mintAccount = await connection.getAccountInfo(mint);
   await tokens().updateOne(
     { mint: mint.toBase58() },
     {
@@ -250,6 +335,8 @@ async function indexTokenInfo(a: Decoded, slot: number, splSupply?: string) {
         uri: metadata.uri,
         maxSupply: str(a.max_supply),
         isUsdc: a.is_usdc,
+        isExternal,
+        decimals: mintAccount && mintAccount.data.length > 44 ? mintAccount.data[44] : 6,
         createdAt: new Date(Number(str(a.created_at)) * 1000),
         ...supplies,
         ...(await fetchOffChainMetadata(metadata.uri)),
@@ -278,6 +365,7 @@ async function indexAccount(
   else if (type === "TokenInfo") await indexTokenInfo(decoded, slot, splSupply);
   else if (type === "OrderBook") await indexBook(address, decoded, slot);
   else if (type === "OrderViews") await indexBookViews(address, decoded, slot);
+  else if (type === "LpPosition") await indexLpPosition(address, decoded, slot);
 }
 
 /** Every mint's SPL supply in as few RPC calls as possible (100 accounts per call). */

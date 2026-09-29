@@ -14,4 +14,7 @@ export const config = {
   mongoDb: process.env.MONGODB_DB ?? "private_exchange",
   pinataJwt: required("PINATA_JWT"),
   pinataGateway: process.env.PINATA_GATEWAY ?? "https://gateway.pinata.cloud",
+  arciumClusterOffset: Number(process.env.ARCIUM_CLUSTER_OFFSET ?? 456),
+  /** JSON secret-key array of the wallet that pays for automatic order settlement (optional). */
+  settlerKeypair: process.env.SETTLER_KEYPAIR ?? null,
 };

@@ -50,11 +50,21 @@ pub const PRICE_HISTORY_LEN: usize = 32;
 
 pub const COMP_DEF_OFFSET_CREDIT_BALANCE: u32 = comp_def_offset("credit_balance");
 pub const COMP_DEF_OFFSET_SEED_POOL: u32 = comp_def_offset("seed_pool");
-pub const COMP_DEF_OFFSET_SWAP: u32 = comp_def_offset("swap");
+pub const COMP_DEF_OFFSET_POOL_SWAP: u32 = comp_def_offset("pool_swap");
+pub const COMP_DEF_OFFSET_LP_COLLECT: u32 = comp_def_offset("lp_collect");
 pub const COMP_DEF_OFFSET_COMMIT_BALANCE: u32 = comp_def_offset("commit_balance");
 pub const COMP_DEF_OFFSET_DEBIT_BALANCE: u32 = comp_def_offset("debit_balance");
-pub const COMP_DEF_OFFSET_PLACE_ORDER: u32 = comp_def_offset("place_order");
-pub const COMP_DEF_OFFSET_SETTLE_ORDER: u32 = comp_def_offset("settle_order");
+pub const COMP_DEF_OFFSET_BOOK_PLACE: u32 = comp_def_offset("book_place");
+pub const COMP_DEF_OFFSET_BOOK_SETTLE: u32 = comp_def_offset("book_settle");
+
+#[constant]
+pub const LP_POSITION_SEED: &[u8] = b"lp_fees";
+/// Token account (one per mint) holding public tokens moved into the exchange.
+#[constant]
+pub const VAULT_SEED: &[u8] = b"vault";
+
+/// fee × FEE_SCALE >> 24 = fee per LP unit × 2^40 (the LP supply is fixed).
+pub const FEE_SCALE: u64 = u64::MAX / INITIAL_LP_SUPPLY;
 
 #[constant]
 pub const BOOK_SEED: &[u8] = b"book";
@@ -71,3 +81,13 @@ pub const VIEW_CTS: usize = 1;
 /// Open orders one wallet may have in one book, so nobody can fill it alone.
 #[constant]
 pub const MAX_ORDERS_PER_USER: u8 = 3;
+
+/// Order types (must match the circuits).
+#[constant]
+pub const ORDER_LIMIT: u8 = 0;
+/// Fills now at the best prices up to its limit; the rest is returned.
+#[constant]
+pub const ORDER_MARKET: u8 = 1;
+/// Only waits in the book; refused if it would trade immediately.
+#[constant]
+pub const ORDER_POST_ONLY: u8 = 2;
