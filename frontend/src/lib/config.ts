@@ -5,7 +5,8 @@ export const PROGRAM_ID = new PublicKey(
   process.env.NEXT_PUBLIC_PROGRAM_ID ?? "7DtBhe3Fi46dy6Gp1Mj7FbW9oZD3xzRs2RKXurtmL3VP",
 );
 export const ARCIUM_CLUSTER_OFFSET = Number(process.env.NEXT_PUBLIC_ARCIUM_CLUSTER_OFFSET ?? 456);
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
+// Trailing slashes stripped: paths are appended as "/api/…".
+export const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 
 /** Every exchange token uses 6 decimals (same as the program's TOKEN_DECIMALS). */
 export const TOKEN_DECIMALS = 6;
