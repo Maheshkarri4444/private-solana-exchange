@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "main": "dist/index.js",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc && cp src/idl/*.json dist/idl/",
@@ -16,6 +19,7 @@
     "@arcium-hq/client": "^0.15.0",
     "@solana/spl-token": "^0.4.15",
     "@solana/web3.js": "^1.99.0",
+    "@vercel/functions": "^3.10.4",
     "bn.js": "^5.2.5",
     "cors": "^2.8.6",
     "dotenv": "^18.0.3",

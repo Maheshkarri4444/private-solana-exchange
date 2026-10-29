@@ -10,6 +10,11 @@
  * 2. LP fees: every pool swap adds its fee to the pool's encrypted fee growth.
  *    Once a pool has been quiet for a moment, this sends `collect_lp_fees` for
  *    each LP holder, and Arcium pays their share into their private balances.
+ *
+ * On a long-running server it works in a loop (startSettler). On Vercel, where
+ * nothing runs between requests, a round runs after each UptimeRobot tick
+ * (routes/cron.ts), and a book the app just synced settles right away
+ * (routes/accounts.ts).
  */
 import { AnchorProvider, Program, Wallet } from "@anchor-lang/core";
 import {
@@ -35,6 +40,8 @@ import { connection, programId } from "./solana.js";
 const LOOP_MS = 4_000;
 const RETRY_AFTER_MS = 20_000; // after an error (e.g. the owner's account is busy)
 const CALLBACK_TIMEOUT_MS = 120_000;
+/** A job only starts when it can finish before the round's deadline (Vercel ends a function at 300 s). */
+const JOB_MS = CALLBACK_TIMEOUT_MS + 15_000;
 /** A payout briefly locks the pool, so wait until trading pauses this long. */
 const POOL_QUIET_S = 10;
 
@@ -42,12 +49,35 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const pda = (...seeds: Buffer[]) => PublicKey.findProgramAddressSync(seeds, programId)[0];
 const idle = (key: PublicKey) => key.equals(PublicKey.default);
 
+export interface Settler {
+  payer: PublicKey;
+  /** One round: every book waiting to settle and every pool owing LP fees. */
+  tick(finishBy?: number): Promise<void>;
+  /** Settles the books among `addresses` that traded (the app just synced them). */
+  settleBooks(addresses: string[], finishBy?: number): Promise<void>;
+}
+
+let settler: Settler | null | undefined;
+
+/** The settler, built once per process (so a book is never worked on twice); null without SETTLER_KEYPAIR. */
+export function getSettler(): Settler | null {
+  if (settler === undefined) settler = config.settlerKeypair ? createSettler(config.settlerKeypair) : null;
+  return settler;
+}
+
+/** A long-running server: a round every few seconds. */
 export function startSettler() {
-  if (!config.settlerKeypair) {
+  const s = getSettler();
+  if (!s) {
     console.log("settler: SETTLER_KEYPAIR not set, order books and LP fees won't settle automatically");
     return;
   }
-  const payer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(config.settlerKeypair)));
+  setInterval(() => s.tick().catch((e) => console.error("settler:", e?.message)), LOOP_MS);
+  console.log(`settler: on, paying from ${s.payer.toBase58()}`);
+}
+
+function createSettler(secretKey: string): Settler {
+  const payer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKey)));
   const provider = new AnchorProvider(connection, new Wallet(payer), { commitment: "confirmed" });
   const program = new Program<PrivateSolanaExchange>(idl as PrivateSolanaExchange, provider);
   const cluster = config.arciumClusterOffset;
@@ -105,9 +135,10 @@ export function startSettler() {
   }
 
   /** Works through every traded slot of one book, one at a time (each locks the book). */
-  async function settleBook(address: string) {
+  async function settleBook(address: string, finishBy: number) {
     const book = new PublicKey(address);
     for (;;) {
+      if (Date.now() + JOB_MS > finishBy) return; // the next round carries on
       const state = await program.account.orderBook.fetch(book);
       if (state.settleMask === 0 || !idle(state.pendingComputation)) return;
       const slot = Math.log2(state.settleMask & -state.settleMask); // lowest marked slot
@@ -164,25 +195,27 @@ export function startSettler() {
   }
 
   /** Pays every LP holder of one pool (in practice the wallet that seeded it). */
-  async function payPool(address: string, lpMint: string, swapCount: number) {
+  async function payPool(address: string, lpMint: string, swapCount: number, finishBy: number) {
     const holders = await etas()
       .find({ mint: lpMint, isInitialized: true }, { projection: { owner: 1 } })
       .toArray();
     let done = holders.length > 0;
     for (const { owner } of holders) {
+      if (Date.now() + JOB_MS > finishBy) return; // not everyone is paid: the next round carries on
       done = (await payHolder(new PublicKey(address), new PublicKey(owner))) && done;
     }
     if (done) paidUpTo.set(address, swapCount);
   }
 
-  // ------------------------------------------------------------ loop
+  // ------------------------------------------------------------ rounds
 
   const paidUpTo = new Map<string, number>(); // pool → trade count every holder is paid for
 
-  function run(key: string, work: () => Promise<void>) {
-    if (busy.has(key) || (pausedUntil.get(key) ?? 0) > Date.now()) return;
+  /** One book's or pool's work, unless it is already running or resting after an error. */
+  function run(key: string, work: () => Promise<void>): Promise<void> {
+    if (busy.has(key) || (pausedUntil.get(key) ?? 0) > Date.now()) return Promise.resolve();
     busy.add(key);
-    work()
+    return work()
       .catch((e) => {
         console.error(`settler: ${key} —`, e?.message ?? e);
         pausedUntil.set(key, Date.now() + RETRY_AFTER_MS);
@@ -190,19 +223,25 @@ export function startSettler() {
       .finally(() => busy.delete(key));
   }
 
-  async function tick() {
+  async function tick(finishBy = Infinity) {
     const waiting = await books().find({ settleMask: { $gt: 0 } }, { projection: { address: 1 } }).toArray();
-    for (const { address } of waiting) run(`book ${address}`, () => settleBook(address));
-
     const traded = await pools()
       .find({ swapCount: { $gt: 0 } }, { projection: { address: 1, lpMint: 1, swapCount: 1 } })
       .toArray();
-    for (const { address, lpMint, swapCount } of traded) {
-      if (paidUpTo.get(address) === swapCount) continue;
-      run(`pool ${address}`, () => payPool(address, lpMint, swapCount));
-    }
+    await Promise.all([
+      ...waiting.map(({ address }) => run(`book ${address}`, () => settleBook(address, finishBy))),
+      ...traded
+        .filter(({ address, swapCount }) => paidUpTo.get(address) !== swapCount)
+        .map(({ address, lpMint, swapCount }) => run(`pool ${address}`, () => payPool(address, lpMint, swapCount, finishBy))),
+    ]);
   }
 
-  setInterval(() => tick().catch((e) => console.error("settler:", e?.message)), LOOP_MS);
-  console.log(`settler: on, paying from ${payer.publicKey.toBase58()}`);
+  async function settleBooks(addresses: string[], finishBy = Infinity) {
+    const waiting = await books()
+      .find({ address: { $in: addresses }, settleMask: { $gt: 0 } }, { projection: { address: 1 } })
+      .toArray();
+    await Promise.all(waiting.map(({ address }) => run(`book ${address}`, () => settleBook(address, finishBy))));
+  }
+
+  return { payer: payer.publicKey, tick, settleBooks };
 }

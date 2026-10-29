@@ -130,26 +130,38 @@ export interface PricePointDoc {
   price: string;
 }
 
-const client = new MongoClient(config.mongoUri);
+// One small pool per process (on Vercel, per function instance), and a dead
+// database fails in seconds instead of hanging the request.
+const client = new MongoClient(config.mongoUri, { maxPoolSize: 5, serverSelectionTimeoutMS: 8000 });
 let db: ReturnType<MongoClient["db"]> | undefined;
+let connecting: Promise<void> | undefined;
 
-export async function connectDb(): Promise<void> {
-  await client.connect();
-  db = client.db(config.mongoDb);
-  await tokens().createIndex({ mint: 1 }, { unique: true });
-  await tokens().createIndex({ creator: 1, createdAt: -1 });
-  await etas().createIndex({ address: 1 }, { unique: true });
-  await etas().createIndex({ owner: 1 });
-  await pools().createIndex({ address: 1 }, { unique: true });
-  await pools().createIndex({ tokenMint: 1 }, { unique: true });
-  await prices().createIndex({ pool: 1, time: 1, price: 1 }, { unique: true });
-  await books().createIndex({ address: 1 }, { unique: true });
-  await books().createIndex({ tokenMint: 1 }, { unique: true });
-  await bookViews().createIndex({ address: 1 }, { unique: true });
-  await bookViews().createIndex({ book: 1 }, { unique: true });
-  await bookPrices().createIndex({ book: 1, time: 1, price: 1 }, { unique: true });
-  await lpPositions().createIndex({ address: 1 }, { unique: true });
-  await lpPositions().createIndex({ owner: 1 });
+/** Connects once (every later call shares it) and makes sure the indexes exist. */
+export function connectDb(): Promise<void> {
+  connecting ??= (async () => {
+    await client.connect();
+    db = client.db(config.mongoDb);
+    await Promise.all([
+      tokens().createIndex({ mint: 1 }, { unique: true }),
+      tokens().createIndex({ creator: 1, createdAt: -1 }),
+      etas().createIndex({ address: 1 }, { unique: true }),
+      etas().createIndex({ owner: 1 }),
+      pools().createIndex({ address: 1 }, { unique: true }),
+      pools().createIndex({ tokenMint: 1 }, { unique: true }),
+      prices().createIndex({ pool: 1, time: 1, price: 1 }, { unique: true }),
+      books().createIndex({ address: 1 }, { unique: true }),
+      books().createIndex({ tokenMint: 1 }, { unique: true }),
+      bookViews().createIndex({ address: 1 }, { unique: true }),
+      bookViews().createIndex({ book: 1 }, { unique: true }),
+      bookPrices().createIndex({ book: 1, time: 1, price: 1 }, { unique: true }),
+      lpPositions().createIndex({ address: 1 }, { unique: true }),
+      lpPositions().createIndex({ owner: 1 }),
+    ]);
+  })().catch((e) => {
+    connecting = undefined; // the next request tries again
+    throw e;
+  });
+  return connecting;
 }
 
 function collection<T extends object>(name: string): Collection<T> {

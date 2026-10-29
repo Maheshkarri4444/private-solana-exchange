@@ -3,7 +3,11 @@
  *
  *   start:   one full snapshot (getProgramAccounts)
  *   live:    websocket push for every account the program changes
- *   safety:  a full snapshot again every minute, in case a push was missed
+ *   safety:  a full snapshot again every 5 minutes, in case a push was missed
+ *
+ * That is a long-running server (startIndexer). On Vercel nothing runs between
+ * requests: the snapshot runs when UptimeRobot calls /api/cron/tick, and the
+ * app's own /api/sync re-reads what each of its transactions changed.
  *
  * It indexes account *state*, never transactions: a failed transaction never
  * changes state, so the database can only reflect what really happened.
@@ -12,6 +16,7 @@
 import { BorshAccountsCoder, BorshCoder, EventParser, type Idl } from "@anchor-lang/core";
 import { getTokenMetadata } from "@solana/spl-token";
 import { type AccountInfo, PublicKey } from "@solana/web3.js";
+import { waitUntil } from "@vercel/functions";
 import idl from "./idl/private_solana_exchange.json" with { type: "json" };
 import {
   type BookDoc,
@@ -37,7 +42,8 @@ const discriminators = new Map(
 
 const events = new EventParser(programId, new BorshCoder(idl as Idl));
 
-const FULL_SYNC_MS = 60_000;
+// A full scan is the priciest RPC call; live pushes and the app's own /api/sync keep things fresh in between.
+const FULL_SYNC_MS = 5 * 60_000;
 const DEFAULT_KEY = PublicKey.default.toBase58();
 
 // Decoded accounts use the raw IDL's snake_case names.
@@ -112,8 +118,11 @@ async function indexPool(address: string, a: Decoded, slot: number) {
   // index was offline for more than the 32 the account keeps: rebuild them.
   const expected = doc.status === 1 ? doc.swapCount + 1 : 0;
   if ((await prices().countDocuments({ pool: address })) < expected) {
-    backfill(address, doc.swapCount, "PoolUpdated", "pool", prices()).catch((e) =>
-      console.error("indexer: price backfill failed —", e?.message),
+    // on Vercel the function stays alive for it after the response
+    waitUntil(
+      backfill(address, doc.swapCount, "PoolUpdated", "pool", prices()).catch((e) =>
+        console.error("indexer: price backfill failed —", e?.message),
+      ),
     );
   }
 }
@@ -214,8 +223,10 @@ async function indexBook(address: string, a: Decoded, slot: number) {
   if (doc.trades === 0) return;
   await savePoints(bookPrices(), [{ book: address, time: doc.lastTradeAt, price: doc.lastPrice }]);
   if ((await bookPrices().countDocuments({ book: address })) < doc.trades) {
-    backfill(address, doc.trades, "OrderPlaced", "book", bookPrices()).catch((e) =>
-      console.error("indexer: book price backfill failed —", e?.message),
+    waitUntil(
+      backfill(address, doc.trades, "OrderPlaced", "book", bookPrices()).catch((e) =>
+        console.error("indexer: book price backfill failed —", e?.message),
+      ),
     );
   }
 }

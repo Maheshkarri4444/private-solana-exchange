@@ -21,4 +21,6 @@ export const config = {
   arciumClusterOffset: Number(process.env.ARCIUM_CLUSTER_OFFSET ?? 456),
   /** JSON secret-key array of the wallet that pays for automatic order settlement (optional). */
   settlerKeypair: process.env.SETTLER_KEYPAIR ?? null,
+  /** UptimeRobot calls /api/cron/tick?key=<this>: on Vercel it replaces the server's timers. */
+  cronKey: process.env.CRON_KEY ?? null,
 };

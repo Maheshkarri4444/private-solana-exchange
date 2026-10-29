@@ -14,6 +14,9 @@ export function explainError(e: unknown): string {
   const known = code !== null ? byCode.get(code) : undefined;
   if (known) return known;
 
+  if (/failed to fetch|networkerror|fetch failed|load failed|429|too many requests/i.test(text)) {
+    return "Couldn't reach Solana devnet: the public RPC is busy for a moment. Please try again; your funds are safe.";
+  }
   if (/insufficient (funds|lamports)|debit an account/i.test(text)) {
     return "Your wallet needs a little devnet SOL for transaction fees.";
   }

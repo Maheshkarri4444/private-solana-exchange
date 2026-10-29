@@ -12,6 +12,7 @@ import { FillNotifier } from "./FillNotifier";
 import { LpFeeNotifier } from "./LpFeeNotifier";
 import { Toaster } from "./Toaster";
 import { RPC_URL } from "@/lib/config";
+import { RPC_CONFIG } from "@/lib/rpc";
 
 // Throwaway in-browser wallet for automated testing only. Off unless the env flag is set.
 const ENABLE_BURNER = process.env.NEXT_PUBLIC_ENABLE_BURNER_WALLET === "true";
@@ -21,7 +22,7 @@ export function Providers({ children }: { children: ReactNode }) {
   const wallets = useMemo(() => (ENABLE_BURNER ? [new UnsafeBurnerWalletAdapter()] : []), []);
 
   return (
-    <ConnectionProvider endpoint={RPC_URL}>
+    <ConnectionProvider endpoint={RPC_URL} config={RPC_CONFIG}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <PrivateAccountProvider>

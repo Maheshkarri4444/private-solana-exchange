@@ -1,7 +1,9 @@
 import { PublicKey } from "@solana/web3.js";
+import { waitUntil } from "@vercel/functions";
 import { Router } from "express";
 import { etas, lpPositions, tokens } from "../db.js";
 import { syncAccounts } from "../indexer.js";
+import { getSettler } from "../settler.js";
 
 export const accountsRouter = Router();
 
@@ -53,6 +55,8 @@ accountsRouter.get("/lp-positions", async (req, res) => {
  * POST /api/sync  { accounts: string[] }
  * Re-reads these accounts from the chain right now. The app calls it after its
  * own transactions so the next read is fresh without waiting for the push.
+ * A book among them that just traded is settled right away, not at the next
+ * settler round.
  */
 accountsRouter.post("/sync", async (req, res) => {
   const list: unknown[] = Array.isArray(req.body?.accounts) ? req.body.accounts : [];
@@ -61,5 +65,16 @@ accountsRouter.post("/sync", async (req, res) => {
     res.status(400).json({ error: `1-${MAX_SYNC} valid account addresses required` });
     return;
   }
-  res.json({ synced: await syncAccounts(keys as PublicKey[]) });
+  const addresses = keys as PublicKey[];
+  const synced = await syncAccounts(addresses);
+  const settler = getSettler();
+  if (settler) {
+    // on Vercel the function stays alive for it after the response (under its 300 s)
+    waitUntil(
+      settler
+        .settleBooks(addresses.map((k) => k.toBase58()), Date.now() + 280_000)
+        .catch((e) => console.error("settler:", e?.message)),
+    );
+  }
+  res.json({ synced });
 });

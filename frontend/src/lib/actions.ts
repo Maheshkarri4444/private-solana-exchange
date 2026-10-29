@@ -139,10 +139,15 @@ export async function mintPrivate(
   return { signature, result };
 }
 
-/** The SPL token program that owns a mint (Token-2022 for exchange tokens; outside tokens vary). */
+const tokenPrograms = new Map<string, PublicKey>();
+
+/** The SPL token program that owns a mint (Token-2022 for exchange tokens; outside tokens vary). Never changes, so read once. */
 async function tokenProgramOf(program: ExchangeProgram, mint: PublicKey): Promise<PublicKey> {
+  const known = tokenPrograms.get(mint.toBase58());
+  if (known) return known;
   const info = await program.provider.connection.getAccountInfo(mint);
   if (!info) throw new Error("Token mint not found");
+  tokenPrograms.set(mint.toBase58(), info.owner);
   return info.owner;
 }
 

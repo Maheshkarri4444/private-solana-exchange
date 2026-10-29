@@ -164,7 +164,7 @@ the program simply never accepts a ciphertext from a user.
 
 **Reading state: the backend index.** The browser never scans the chain (public
 RPCs rate-limit that). The backend mirrors every program account into MongoDB:
-one snapshot at start, live websocket updates, and a re-check every 60 s.
+one snapshot at start, live websocket updates, and a re-check every 5 minutes.
 
 - It stores account **state**, not transactions. A failed transaction changes no
   account, so it can never leave a wrong record.
