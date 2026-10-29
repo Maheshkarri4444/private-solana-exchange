@@ -27,6 +27,11 @@
     "mongodb": "^7.6.0",
     "multer": "^2.4.0"
   },
+  "overrides": {
+    "rpc-websockets": {
+      "uuid": "^11.1.0"
+    }
+  },
   "devDependencies": {
     "@types/bn.js": "^5.2.0",
     "@types/cors": "^2.8.19",
